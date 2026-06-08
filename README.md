@@ -1,129 +1,142 @@
-﻿# SIMO System
+# SIMO Mugi Jaya
 
-SIMO System adalah aplikasi dashboard web untuk memantau aktivitas operasional pabrik, mulai dari progres produksi warehouse, logistik, quality control, hingga audit trail. Project ini dibangun menggunakan React, Vite, Tailwind CSS, React Router, dan Lucide React untuk menghasilkan antarmuka yang modern, ringan, dan mudah dikembangkan.
-
-## Fitur Utama
-
-- **Dashboard Produksi**: Menampilkan ringkasan active projects, total warehouses, pending QC items, dan progres produksi setiap warehouse.
-- **Monitoring Warehouse**: Visualisasi progress bar untuk berbagai kategori material dan tahap produksi.
-- **Logistics Tracking**: Halaman logistik untuk memantau manifest, pengiriman, dan status distribusi.
-- **Audit Trail**: Tabel activity log untuk mencatat perubahan data sistem berdasarkan timestamp, pengguna, aksi, dan tabel terdampak.
-- **Navigasi Sidebar**: Layout dashboard dengan menu Dashboard, Warehouses, Logistics, QC, dan Audit Logs.
-- **UI Responsif**: Tampilan bersih berbasis utility class Tailwind CSS yang nyaman digunakan pada berbagai ukuran layar.
+SIMO Mugi Jaya adalah prototype Operational Management Information System untuk Production, Logistics, dan Quality Control. MVP Day 1 berfokus pada Production Progress Monitoring, Digital QC Checklist, role demo sederhana, dan audit trail.
 
 ## Tech Stack
 
-- **React** - Library utama untuk membangun user interface.
-- **Vite** - Development server dan build tool yang cepat.
-- **Tailwind CSS** - Utility-first CSS framework untuk styling.
-- **React Router DOM** - Routing antar halaman dashboard.
-- **Lucide React** - Icon library untuk komponen visual.
-- **ESLint** - Pemeriksaan kualitas dan konsistensi kode.
-
-## Struktur Project
-
-```text
-MugiMugi/
-├── public/                 # Static assets publik
-├── src/
-│   ├── assets/             # Asset gambar dan ikon aplikasi
-│   ├── pages/              # Halaman utama aplikasi
-│   │   ├── AuditLogs.jsx
-│   │   ├── Dashboard.jsx
-│   │   └── Logistics.jsx
-│   ├── App.jsx             # Layout utama dan konfigurasi routing
-│   ├── App.css             # Style tambahan aplikasi
-│   ├── index.css           # Global style dan Tailwind import
-│   └── main.jsx            # Entry point React
-├── index.html
-├── package.json
-├── vite.config.js
-└── README.md
-```
+- React 19
+- Vite 8
+- Tailwind CSS 4
+- React Router DOM 7
+- Lucide React
+- ESLint
 
 ## Prasyarat
 
-Pastikan perangkat sudah memiliki:
-
-- Node.js versi 18 atau lebih baru
-- npm versi 9 atau lebih baru
+- Node.js 18 atau lebih baru
+- npm 9 atau lebih baru
 
 ## Instalasi
-
-Clone repository:
-
-```bash
-git clone https://github.com/username/simo-system.git
-cd simo-system
-```
-
-Install dependencies:
 
 ```bash
 npm install
 ```
 
-Jalankan development server:
+## Menjalankan Aplikasi
 
 ```bash
 npm run dev
 ```
 
-Buka aplikasi di browser:
+Buka aplikasi di:
 
 ```text
 http://localhost:5173/
 ```
 
+Jika port 5173 sedang dipakai, Vite akan memberikan port lain di terminal.
+
 ## Script NPM
 
 | Command | Deskripsi |
 | --- | --- |
-| `npm run dev` | Menjalankan aplikasi dalam mode development. |
+| `npm run dev` | Menjalankan development server. |
 | `npm run build` | Membuat build production ke folder `dist`. |
-| `npm run preview` | Menjalankan preview dari hasil build production. |
-| `npm run lint` | Menjalankan ESLint untuk memeriksa kualitas kode. |
+| `npm run preview` | Preview hasil build production. |
+| `npm run lint` | Menjalankan ESLint. |
+
+## Demo Accounts
+
+Role login masih disimulasikan melalui role switcher di top bar.
+
+| User | Role | Demo Use |
+| --- | --- | --- |
+| Rina Wijaya | Owner | Melihat dashboard dan audit trail. |
+| Budi Santoso | Production Manager | Monitoring produksi dan update work item. |
+| Joko Anwar | Foreman | Update status pekerjaan produksi. |
+| Siti Nurhaliza | QC Inspector | Submit Digital QC Checklist. |
+| Dewi Lestari | Admin | Akses demo penuh. |
 
 ## Halaman Aplikasi
 
 | Route | Halaman | Deskripsi |
 | --- | --- | --- |
-| `/` | Dashboard | Ringkasan status produksi dan progress warehouse. |
-| `/logistics` | Logistics | Monitoring data dan status aktivitas logistik. |
-| `/audit` | Audit Logs | Riwayat aktivitas dan perubahan data sistem. |
-| `/warehouses` | Warehouses | Placeholder untuk modul warehouse. |
-| `/qc` | Quality Control | Placeholder untuk modul quality control. |
+| `/` | Dashboard | Ringkasan project, warehouse, work item, progress produksi, dan shipping gate. |
+| `/warehouses` | Production Work Items | Update status work item dan monitoring warehouse. |
+| `/qc` | Digital QC Checklist | Submit checklist QC dan menentukan status ready to ship. |
+| `/audit` | Audit Logs | Riwayat aktivitas produksi dan QC, termasuk export CSV. |
+| `/logistics` | Logistics | Tampilan demo tracking logistik statis. |
 
-## Build Production
+## Completed Features - Day 1 MVP
 
-Untuk membuat versi production:
+- Shared demo data untuk users, roles, projects, warehouses, work items, QC checklists, dan audit logs.
+- LocalStorage persistence untuk demo data.
+- Role switcher untuk Owner, Production Manager, Foreman, QC Inspector, dan Admin.
+- Dashboard produksi dengan progress project dan warehouse yang dihitung dari work items.
+- Production Work Items board dengan status:
+  - To-Do
+  - In-Progress
+  - Done
+- Audit log otomatis untuk perubahan status produksi.
+- Digital QC Checklist dengan field:
+  - project
+  - warehouse
+  - work item
+  - material name
+  - length
+  - width
+  - thickness
+  - QC status
+  - notes
+  - evidence photo reference
+- QC status:
+  - Pending
+  - Passed QC
+  - Rework
+- Shipping gate: material hanya `Ready` jika status QC adalah `Passed QC`.
+- Audit log otomatis untuk submission QC.
+- CSV export untuk audit logs.
+- Dokumentasi scan dan progress:
+  - `CODEBASE_SCAN_REPORT.md`
+  - `DAILY_PROGRESS.md`
+
+## Demo Flow
+
+1. Pilih `Joko Anwar - Foreman`.
+2. Buka `Warehouses`.
+3. Ubah status work item menjadi `In-Progress` atau `Done`.
+4. Pilih `Rina Wijaya - Owner` atau `Budi Santoso - Production Manager`.
+5. Buka `Dashboard` dan cek progress produksi.
+6. Pilih `Siti Nurhaliza - QC Inspector`.
+7. Buka `QC`.
+8. Submit checklist dengan status `Passed QC` atau `Rework`.
+9. Buka `Audit Logs` dan cek riwayat aktivitas.
+
+## Unfinished Features
+
+- Backend API belum tersedia.
+- Database/migration belum tersedia.
+- Authentication masih simulasi role switcher.
+- Evidence photo masih berupa filename/reference, belum upload file.
+- Logistics masih halaman statis.
+- Automated tests belum dikonfigurasi.
+
+## Verification
+
+Sudah dijalankan:
 
 ```bash
+npm run lint
 npm run build
 ```
 
-Untuk melihat hasil build secara lokal:
+Keduanya berhasil.
 
-```bash
-npm run preview
-```
+## Next Development Plan
 
-## Rencana Pengembangan
-
-- Integrasi backend API untuk data warehouse, logistik, dan audit log.
-- Menambahkan autentikasi dan role-based access control.
-- Menyediakan fitur export laporan dalam format CSV atau PDF.
-- Menambahkan halaman detail untuk warehouse dan quality control.
-- Menambahkan unit test dan end-to-end test.
-
-## Kontribusi
-
-Kontribusi sangat terbuka. Silakan lakukan fork repository, buat branch fitur baru, lalu ajukan pull request.
-
-```bash
-git checkout -b feature/nama-fitur
-```
-
-## Lisensi
-
-Project ini belum menentukan lisensi resmi. Tambahkan file `LICENSE` sebelum digunakan untuk kebutuhan publik atau produksi.
+- Tambahkan backend API dan database migrations.
+- Ganti role switcher dengan login dan role-based access control yang sebenarnya.
+- Pindahkan audit logging ke server.
+- Tambahkan upload evidence photo untuk QC.
+- Tambahkan detail page untuk project, warehouse, dan work item.
+- Tambahkan test untuk kalkulasi progress, QC gate, audit log, dan demo flow.
