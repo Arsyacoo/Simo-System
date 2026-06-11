@@ -1,120 +1,210 @@
-import { Activity, Building2, AlertCircle } from 'lucide-react';
+import { Activity, Building2, CheckCircle2, ClipboardList, PackageCheck } from 'lucide-react';
+import { useAppData } from '../context/AppDataCore';
 
-const StatCard = ({ title, value, status, statusColor, icon: Icon, iconColor, iconBgColor }) => (
-  <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-    <div className="flex justify-between items-start mb-4">
-      <div className={`p-3 rounded-lg ${iconBgColor}`}>
+const toneByPercentage = (percentage) => {
+  if (percentage >= 80) {
+    return {
+      bar: 'bg-emerald-500',
+      badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      dot: 'bg-emerald-500',
+    };
+  }
+
+  if (percentage >= 50) {
+    return {
+      bar: 'bg-blue-600',
+      badge: 'bg-blue-50 text-blue-700 border-blue-200',
+      dot: 'bg-blue-600',
+    };
+  }
+
+  return {
+    bar: 'bg-amber-500',
+    badge: 'bg-amber-50 text-amber-700 border-amber-200',
+    dot: 'bg-amber-500',
+  };
+};
+
+const StatCard = ({ title, value, status, icon: Icon, iconColor, iconBgColor }) => (
+  <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="mb-4 flex items-start justify-between">
+      <div className={`rounded-lg p-3 ${iconBgColor}`}>
         <Icon className={iconColor} size={24} />
       </div>
     </div>
-    <div>
-      <p className="text-slate-500 font-medium text-sm">{title}</p>
-      <h3 className="text-3xl font-bold text-slate-800 mt-1">{value}</h3>
-      <div className="mt-2 flex items-center gap-1.5">
-        {statusColor === 'text-emerald-600' && (
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-        )}
-        <span className={`text-sm font-medium ${statusColor}`}>
-          {status}
+    <p className="text-sm font-medium text-slate-500">{title}</p>
+    <h3 className="mt-1 text-3xl font-bold text-slate-800">{value}</h3>
+    <p className="mt-2 text-sm font-medium text-slate-500">{status}</p>
+  </div>
+);
+
+const ProgressBar = ({ percentage }) => {
+  const tone = toneByPercentage(percentage);
+
+  return (
+    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+      <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${percentage}%` }}></div>
+    </div>
+  );
+};
+
+const ProgressRow = ({ title, subtitle, total, completed, percentage, rightLabel }) => {
+  const tone = toneByPercentage(percentage);
+
+  return (
+    <div className="border-b border-slate-100 py-4 last:border-b-0">
+      <div className="mb-2 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h4 className="truncate font-semibold text-slate-800">{title}</h4>
+          <p className="text-sm text-slate-500">{subtitle}</p>
+        </div>
+        <span className={`rounded border px-2 py-1 text-xs font-bold ${tone.badge}`}>
+          {percentage}%
         </span>
       </div>
-    </div>
-  </div>
-);
-
-const ProgressBar = ({ label, sublabel, percentage, colorClass }) => (
-  <div className="mb-6">
-    <div className="flex justify-between items-end mb-2">
-      <div>
-        <h4 className="font-semibold text-slate-800">{label}</h4>
-        <p className="text-sm text-slate-500">{sublabel}</p>
+      <ProgressBar percentage={percentage} />
+      <div className="mt-2 flex items-center justify-between text-xs font-medium text-slate-500">
+        <span>
+          {completed}/{total} done
+        </span>
+        <span>{rightLabel}</span>
       </div>
-      <span className="font-bold text-slate-800">{percentage}%</span>
     </div>
-    <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
-      <div 
-        className={`h-full rounded-full ${colorClass}`} 
-        style={{ width: `${percentage}%` }}
-      ></div>
-    </div>
-  </div>
-);
+  );
+};
 
 export default function Dashboard() {
-  const warehouses = [
-    { id: 1, label: 'Warehouse 1', sublabel: 'Frame', percentage: 80, colorClass: 'bg-blue-600' },
-    { id: 2, label: 'Warehouse 2', sublabel: 'Glass', percentage: 40, colorClass: 'bg-orange-500' },
-    { id: 3, label: 'Warehouse 3', sublabel: 'Aluminium Type A', percentage: 95, colorClass: 'bg-emerald-500' },
-    { id: 4, label: 'Warehouse 4', sublabel: 'Sealant & Rubber', percentage: 20, colorClass: 'bg-blue-500' }, // Image shows blue for 20%? Wait, let's use blue as per image
-    { id: 5, label: 'Warehouse 5', sublabel: 'Hardware (Locks)', percentage: 60, colorClass: 'bg-purple-500' }, // Image shows purple
-    { id: 6, label: 'Warehouse 6', sublabel: 'Custom Profiles', percentage: 75, colorClass: 'bg-indigo-500' }, // Image shows dark blue/indigo
-    { id: 7, label: 'Warehouse 7', sublabel: 'Packaging Materials', percentage: 90, colorClass: 'bg-emerald-500' },
-    { id: 8, label: 'Warehouse 8', sublabel: 'Assembly Stage', percentage: 35, colorClass: 'bg-orange-500' },
-  ];
+  const { data, metrics } = useAppData();
+  const qcQueue = data.workItems.filter((item) => item.status === 'Done' && !item.readyToShip);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard 
-          title="Active Projects" 
-          value="4" 
-          status="2 on track"
-          statusColor="text-emerald-600"
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Production Dashboard</h1>
+          <p className="text-slate-500">SIMO Mugi Jaya operational snapshot</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
+          <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+          Live demo data
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Active Projects"
+          value={metrics.totalProjects}
+          status={`${metrics.totalWarehouses} warehouses assigned`}
           icon={Activity}
           iconColor="text-blue-600"
           iconBgColor="bg-blue-50"
         />
-        <StatCard 
-          title="Total Warehouses" 
-          value="8" 
-          status="All units operational"
-          statusColor="text-slate-500"
-          icon={Building2}
+        <StatCard
+          title="Total Work Items"
+          value={metrics.totalWorkItems}
+          status={`${metrics.completedWorkItems} completed`}
+          icon={ClipboardList}
           iconColor="text-indigo-600"
           iconBgColor="bg-indigo-50"
         />
-        <StatCard 
-          title="Pending QC Items" 
-          value="142" 
-          status="Requires immediate action"
-          statusColor="text-rose-600"
-          icon={AlertCircle}
+        <StatCard
+          title="Production Progress"
+          value={`${metrics.progressPercentage}%`}
+          status="Based on completed work items"
+          icon={CheckCircle2}
+          iconColor="text-emerald-600"
+          iconBgColor="bg-emerald-50"
+        />
+        <StatCard
+          title="Ready To Ship"
+          value={metrics.readyToShipItems}
+          status={`${metrics.pendingQcItems} completed items blocked by QC`}
+          icon={PackageCheck}
           iconColor="text-rose-600"
           iconBgColor="bg-rose-50"
         />
       </div>
 
-      {/* Progress Section */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-        <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-2 text-slate-800">
-            <Building2 size={20} className="text-slate-500" />
-            <h3 className="text-lg font-bold">Warehouse Production Progress</h3>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-2">
+              <Activity size={20} className="text-slate-500" />
+              <h2 className="text-lg font-bold text-slate-800">Project Progress</h2>
+            </div>
+            <span className="text-sm font-semibold text-slate-500">{metrics.totalProjects} projects</span>
           </div>
-          
-          <div className="flex items-center gap-4 text-sm font-medium text-slate-600">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-              <span>&gt; 80%</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-blue-600"></div>
-              <span>50-80%</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-              <span>&lt; 50%</span>
-            </div>
+
+          <div>
+            {metrics.projectProgress.map((project) => (
+              <ProgressRow
+                key={project.id}
+                title={`${project.code} - ${project.name}`}
+                subtitle={`${project.client} | Due ${project.dueDate}`}
+                total={project.totalWorkItems}
+                completed={project.completedWorkItems}
+                percentage={project.progressPercentage}
+                rightLabel={project.priority}
+              />
+            ))}
           </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-2">
+              <Building2 size={20} className="text-slate-500" />
+              <h2 className="text-lg font-bold text-slate-800">Warehouse Progress</h2>
+            </div>
+            <span className="text-sm font-semibold text-slate-500">{metrics.totalWarehouses} warehouses</span>
+          </div>
+
+          <div>
+            {metrics.warehouseProgress.map((warehouse) => (
+              <ProgressRow
+                key={warehouse.id}
+                title={`${warehouse.code} - ${warehouse.name}`}
+                subtitle={warehouse.category}
+                total={warehouse.totalWorkItems}
+                completed={warehouse.completedWorkItems}
+                percentage={warehouse.progressPercentage}
+                rightLabel={warehouse.projectCodes.join(', ') || 'No project'}
+              />
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">QC Shipping Gate</h2>
+            <p className="text-sm text-slate-500">Completed materials require Passed QC before shipping.</p>
+          </div>
+          <span className="rounded border border-rose-200 bg-rose-50 px-3 py-1 text-sm font-bold text-rose-700">
+            {qcQueue.length} blocked
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-2">
-          {warehouses.map(wh => (
-            <ProgressBar key={wh.id} {...wh} />
-          ))}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {qcQueue.map((item) => {
+            const project = data.projects.find((entry) => entry.id === item.projectId);
+            const warehouse = data.warehouses.find((entry) => entry.id === item.warehouseId);
+
+            return (
+              <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <h3 className="font-semibold text-slate-800">{item.materialName}</h3>
+                  <span className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-700">
+                    {item.qcStatus}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-500">{project?.code} | {warehouse?.code}</p>
+              </div>
+            );
+          })}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
