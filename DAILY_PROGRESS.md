@@ -1,3 +1,62 @@
+# DAILY PROGRESS - 2026-06-11 (DAY 2)
+
+Project: SIMO Mugi Jaya
+
+## Completed Today
+
+- Scanned the complete Day 1 frontend flow and created `DAY2_BACKEND_PLAN.md` before application code changes.
+- Added Express 5, SQLite, CORS, Nodemon, and Concurrently.
+- Added an idempotent SQLite schema and seed process based on `src/data/seedData.js`.
+- Added REST endpoints for health, roles, users, projects, warehouses, work items, QC checklists, and audit logs.
+- Added server-side audit logging for production status updates and QC submissions.
+- Added transactional QC shipping gate updates.
+- Added consistent success and error JSON envelopes.
+- Added frontend API services behind a disabled backend feature flag.
+- Added backend integration tests using `node:test` and an in-memory SQLite database.
+
+## Files Created
+
+- Backend application, routes, database helpers, schema, seed, audit utility, serializers, and integration test under `server/`.
+- Frontend bridge services under `src/services/`.
+- `.env.example`, `DAY2_BACKEND_PLAN.md`, and `DAY2_BACKEND_SUMMARY.md`.
+
+## Files Modified
+
+- `package.json`, `package-lock.json`, `.gitignore`, and `eslint.config.js`.
+- `README.md` and `DAILY_PROGRESS.md`.
+
+## Verification
+
+- `npm run lint` passed.
+- `npm run build` passed.
+- `npm run test:server` passed with 8 integration tests.
+- `npm run db:seed` passed and remained safe when run repeatedly.
+- Backend health and main endpoints were smoke tested.
+
+## Bugs Found And Fixed
+
+- Node test runner on Windows did not resolve a directory passed to `node --test`.
+  - Fix: target the integration test file explicitly in `test:server`.
+- The repository initially had no installed dependencies, so lint/build commands were unavailable.
+  - Fix: installed dependencies with npm before baseline verification.
+
+## Known Limitations
+
+- Frontend still uses localStorage and is not connected to backend services yet.
+- Role switching and optional `userId` remain demo behavior, not authentication.
+- CORS is open for development.
+- Evidence photos remain filename/reference values.
+- SQLite schema is idempotent SQL without a migration framework.
+- Logistics remains a static page.
+
+## Recommended Next Sprint
+
+- Integrate frontend reads and mutations with the API while retaining rollback fallback.
+- Add real authentication and RBAC.
+- Add QC evidence upload storage.
+- Add a migration framework and production CORS configuration.
+- Build logistics manifest and tracking foundations.
+
 # DAILY PROGRESS - 2026-06-08
 
 Project: SIMO Mugi Jaya

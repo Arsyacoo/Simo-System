@@ -5,15 +5,23 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "nodemon --watch server --ext js,sql --exec \"node --env-file-if-exists=.env server/index.js\"",
+    "dev:all": "concurrently -k -n frontend,backend -c blue,green \"npm:dev\" \"npm:dev:server\"",
+    "start:server": "node --env-file-if-exists=.env server/index.js",
+    "db:seed": "node --env-file-if-exists=.env server/seed/seedDatabase.js",
+    "test:server": "node --test server/tests/api.test.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "lucide-react": "^1.16.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.1"
+    "react-router-dom": "^7.15.1",
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -21,10 +29,12 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^10.0.3",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "nodemon": "^3.1.14",
     "tailwindcss": "^4.3.0",
     "vite": "^8.0.12"
   }

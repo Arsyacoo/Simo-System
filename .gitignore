@@ -11,6 +11,19 @@ node_modules
 dist
 dist-ssr
 *.local
+coverage
+.cache
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Generated SQLite databases
+server/db/*.sqlite
+server/db/*.sqlite-*
+server/db/*.db
+server/db/*.db-*
 
 # Editor directories and files
 .vscode/*
