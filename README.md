@@ -176,10 +176,6 @@ Role login masih disimulasikan melalui role switcher di top bar.
 - Shipping gate: material hanya `Ready` jika status QC adalah `Passed QC`.
 - Audit log otomatis untuk submission QC.
 - CSV export untuk audit logs.
-- Dokumentasi scan dan progress:
-  - `CODEBASE_SCAN_REPORT.md`
-  - `DAILY_PROGRESS.md`
-
 ## Completed Features - Day 2 Backend Foundation
 
 - Express REST API dan health check.
