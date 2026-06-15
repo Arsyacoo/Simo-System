@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import { SHARED_DEMO_CODE } from '../../src/data/demoAuth.js';
 import { createApp } from '../app.js';
 import { closeDatabase, createDatabase, get } from '../db/database.js';
 import { seedDatabase } from '../seed/seedDatabase.js';
@@ -38,6 +39,7 @@ after(async () => {
 test('health and collection endpoints return data envelopes', async () => {
   const paths = [
     '/api/health',
+    '/api/auth/me',
     '/api/roles',
     '/api/users',
     '/api/projects',
@@ -48,10 +50,41 @@ test('health and collection endpoints return data envelopes', async () => {
   ];
 
   for (const path of paths) {
-    const { response, body } = await request(path);
-    assert.equal(response.status, 200, path);
-    assert.ok('data' in body, path);
+    if (path === '/api/auth/me') {
+      const { response, body } = await request(path);
+      assert.equal(response.status, 401, path);
+      assert.ok('error' in body, path);
+    } else {
+      const { response, body } = await request(path);
+      assert.equal(response.status, 200, path);
+      assert.ok('data' in body, path);
+    }
   }
+});
+
+test('demo auth login returns a profile and /me resolves the bearer token', async () => {
+  const login = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: 'joko.anwar@simo.test',
+      demoCode: SHARED_DEMO_CODE,
+    }),
+  });
+
+  assert.equal(login.response.status, 200);
+  assert.equal(login.body.data.user.id, 'usr-foreman');
+  assert.equal(login.body.data.user.roleId, 'foreman');
+  assert.ok(login.body.data.token);
+
+  const me = await request('/api/auth/me', {
+    headers: {
+      Authorization: `Bearer ${login.body.data.token}`,
+    },
+  });
+
+  assert.equal(me.response.status, 200);
+  assert.equal(me.body.data.user.id, 'usr-foreman');
+  assert.equal(me.body.data.authMode, 'backend-demo');
 });
 
 test('detail and nested endpoints return expected records', async () => {

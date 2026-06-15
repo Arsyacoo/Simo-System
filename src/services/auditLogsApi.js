@@ -1,4 +1,4 @@
-import { apiRequest } from './apiClient';
+import { apiData } from './apiClient';
 
 export function getAuditLogs(filters = {}) {
   const searchParams = new URLSearchParams();
@@ -12,5 +12,5 @@ export function getAuditLogs(filters = {}) {
   }
 
   const query = searchParams.toString();
-  return apiRequest(`/audit-logs${query ? `?${query}` : ''}`);
+  return apiData(`/audit-logs${query ? `?${query}` : ''}`);
 }

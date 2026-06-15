@@ -38,6 +38,7 @@ export default function Warehouses() {
   const {
     data,
     activeUser,
+    isMutating,
     permissions,
     metrics,
     projectsById,
@@ -76,7 +77,7 @@ export default function Warehouses() {
           }`}
         >
           {permissions.canUpdateProduction
-            ? `${activeUser.roleName} production access`
+            ? `${activeUser.roleName} production access${isMutating ? ' - saving' : ''}`
             : `${activeUser.roleName} view only`}
         </div>
       </div>
@@ -164,7 +165,7 @@ export default function Warehouses() {
                     <select
                       aria-label={`Status for ${item.materialName}`}
                       value={item.status}
-                      disabled={!permissions.canUpdateProduction}
+                      disabled={!permissions.canUpdateProduction || isMutating}
                       onChange={(event) => updateWorkItemStatus(item.id, event.target.value)}
                       className={`w-[150px] rounded-lg border px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-70 ${statusStyles[item.status]}`}
                     >

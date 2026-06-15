@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createInitialDemoState } from '../data/seedData';
+import { getAuditLogs } from '../services/auditLogsApi';
+import { useBackendApi } from '../services/apiClient';
+import { getProjects } from '../services/projectsApi';
+import {
+  getQcChecklists,
+  submitQcChecklist as submitQcChecklistApi,
+} from '../services/qcApi';
+import { getRoles } from '../services/rolesApi';
+import { getUsers } from '../services/usersApi';
+import { getWarehouses } from '../services/warehousesApi';
+import {
+  getWorkItems,
+  updateWorkItemStatus as updateWorkItemStatusApi,
+} from '../services/workItemsApi';
 import { AppDataContext } from './AppDataCore';
+import { useAuth } from './AuthCore';
 
 const STORAGE_KEY = 'simo-mugi-jaya-demo-state';
 const ACTIVE_USER_KEY = 'simo-mugi-jaya-active-user';
@@ -28,7 +43,24 @@ function buildAuditLog(activeUser, details) {
   };
 }
 
+function replaceById(items, replacement) {
+  return items.map((item) => (item.id === replacement.id ? replacement : item));
+}
+
+function normalizeCollections(collections) {
+  return {
+    roles: collections.roles || [],
+    users: collections.users || [],
+    projects: collections.projects || [],
+    warehouses: collections.warehouses || [],
+    workItems: collections.workItems || [],
+    qcChecklists: collections.qcChecklists || [],
+    auditLogs: collections.auditLogs || [],
+  };
+}
+
 export function AppDataProvider({ children }) {
+  const { currentUser, isAuthenticated } = useAuth();
   const [data, setData] = useState(loadDemoState);
   const [activeUserId, setActiveUserId] = useState(() => {
     try {
@@ -37,6 +69,10 @@ export function AppDataProvider({ children }) {
       return 'usr-owner';
     }
   });
+  const [dataSource, setDataSource] = useState(useBackendApi ? 'localStorage-fallback' : 'localStorage');
+  const [apiError, setApiError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isMutating, setIsMutating] = useState(false);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -55,15 +91,79 @@ export function AppDataProvider({ children }) {
     () =>
       data.users.map((user) => ({
         ...user,
-        roleName: rolesById.get(user.roleId)?.name || user.roleId,
+        roleName: user.roleName || rolesById.get(user.roleId)?.name || user.roleId,
       })),
     [data.users, rolesById],
   );
 
-  const activeUser = useMemo(
-    () => users.find((user) => user.id === activeUserId) || users[0],
-    [activeUserId, users],
-  );
+  const activeUser = useMemo(() => {
+    if (currentUser) {
+      return {
+        ...currentUser,
+        roleName: currentUser.roleName || rolesById.get(currentUser.roleId)?.name || currentUser.roleId,
+      };
+    }
+
+    return users.find((user) => user.id === activeUserId) || users[0];
+  }, [activeUserId, currentUser, rolesById, users]);
+  const effectiveActiveUserId = activeUser?.id || activeUserId;
+
+  const loadBackendData = useCallback(async () => {
+    if (!useBackendApi || !isAuthenticated) {
+      return false;
+    }
+
+    setIsLoading(true);
+    setApiError(null);
+
+    try {
+      const [
+        roles,
+        backendUsers,
+        projects,
+        warehouses,
+        workItems,
+        qcChecklists,
+        auditLogs,
+      ] = await Promise.all([
+        getRoles(),
+        getUsers(),
+        getProjects(),
+        getWarehouses(),
+        getWorkItems(),
+        getQcChecklists(),
+        getAuditLogs(),
+      ]);
+
+      setData(normalizeCollections({
+        roles,
+        users: backendUsers,
+        projects,
+        warehouses,
+        workItems,
+        qcChecklists,
+        auditLogs,
+      }));
+      setDataSource('backend');
+      return true;
+    } catch (error) {
+      setApiError(error.message || 'Backend API unavailable. Using local fallback data.');
+      setDataSource('localStorage-fallback');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const timeoutId = window.setTimeout(() => {
+        void loadBackendData();
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
+    }
+  }, [isAuthenticated, loadBackendData]);
 
   const permissions = useMemo(() => {
     const roleId = activeUser?.roleId;
@@ -137,7 +237,7 @@ export function AppDataProvider({ children }) {
     };
   }, [data.projects, data.warehouses, data.workItems, projectsById]);
 
-  const updateWorkItemStatus = useCallback(
+  const applyLocalWorkItemStatus = useCallback(
     (workItemId, nextStatus) => {
       setData((currentData) => {
         const workItem = currentData.workItems.find((item) => item.id === workItemId);
@@ -169,7 +269,36 @@ export function AppDataProvider({ children }) {
     [activeUser],
   );
 
-  const submitQcChecklist = useCallback(
+  const updateWorkItemStatus = useCallback(
+    async (workItemId, nextStatus) => {
+      if (useBackendApi && dataSource === 'backend') {
+        setIsMutating(true);
+        setApiError(null);
+
+        try {
+          const updatedItem = await updateWorkItemStatusApi(workItemId, nextStatus, activeUser?.id);
+          const auditLogs = await getAuditLogs();
+
+          setData((currentData) => ({
+            ...currentData,
+            workItems: replaceById(currentData.workItems, updatedItem),
+            auditLogs,
+          }));
+          return;
+        } catch (error) {
+          setApiError(error.message || 'Backend update failed. Saved to local fallback data.');
+          setDataSource('localStorage-fallback');
+        } finally {
+          setIsMutating(false);
+        }
+      }
+
+      applyLocalWorkItemStatus(workItemId, nextStatus);
+    },
+    [activeUser, applyLocalWorkItemStatus, dataSource],
+  );
+
+  const applyLocalQcChecklist = useCallback(
     (payload) => {
       setData((currentData) => {
         const workItem = currentData.workItems.find((item) => item.id === payload.workItemId);
@@ -214,17 +343,58 @@ export function AppDataProvider({ children }) {
     [activeUser],
   );
 
+  const submitQcChecklist = useCallback(
+    async (payload) => {
+      if (useBackendApi && dataSource === 'backend') {
+        setIsMutating(true);
+        setApiError(null);
+
+        try {
+          await submitQcChecklistApi({
+            ...payload,
+            userId: activeUser?.id,
+            evidencePhotoReference: payload.evidencePhoto,
+          });
+
+          const [workItems, qcChecklists, auditLogs] = await Promise.all([
+            getWorkItems(),
+            getQcChecklists(),
+            getAuditLogs(),
+          ]);
+
+          setData((currentData) => ({
+            ...currentData,
+            workItems,
+            qcChecklists,
+            auditLogs,
+          }));
+          return;
+        } catch (error) {
+          setApiError(error.message || 'Backend QC submission failed. Saved to local fallback data.');
+          setDataSource('localStorage-fallback');
+        } finally {
+          setIsMutating(false);
+        }
+      }
+
+      applyLocalQcChecklist(payload);
+    },
+    [activeUser, applyLocalQcChecklist, dataSource],
+  );
+
   const resetDemoData = useCallback(() => {
     setData(createInitialDemoState());
-    setActiveUserId('usr-owner');
-  }, []);
+    setActiveUserId(currentUser?.id || 'usr-owner');
+    setApiError(null);
+    setDataSource(useBackendApi ? 'localStorage-fallback' : 'localStorage');
+  }, [currentUser]);
 
   const value = useMemo(
     () => ({
       data,
       users,
       activeUser,
-      activeUserId,
+      activeUserId: effectiveActiveUserId,
       setActiveUserId,
       permissions,
       projectsById,
@@ -233,12 +403,17 @@ export function AppDataProvider({ children }) {
       updateWorkItemStatus,
       submitQcChecklist,
       resetDemoData,
+      refreshBackendData: loadBackendData,
+      dataSource,
+      apiError,
+      isLoading,
+      isMutating,
     }),
     [
       data,
       users,
       activeUser,
-      activeUserId,
+      effectiveActiveUserId,
       permissions,
       projectsById,
       warehousesById,
@@ -246,6 +421,11 @@ export function AppDataProvider({ children }) {
       updateWorkItemStatus,
       submitQcChecklist,
       resetDemoData,
+      loadBackendData,
+      dataSource,
+      apiError,
+      isLoading,
+      isMutating,
     ],
   );
 

@@ -74,8 +74,9 @@ const ProgressRow = ({ title, subtitle, total, completed, percentage, rightLabel
 };
 
 export default function Dashboard() {
-  const { data, metrics } = useAppData();
+  const { data, dataSource, isLoading, metrics } = useAppData();
   const qcQueue = data.workItems.filter((item) => item.status === 'Done' && !item.readyToShip);
+  const sourceLabel = dataSource === 'backend' ? 'Backend API' : 'Local fallback';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -86,7 +87,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-500">
           <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-          Live demo data
+          {isLoading ? 'Syncing data' : sourceLabel}
         </div>
       </div>
 

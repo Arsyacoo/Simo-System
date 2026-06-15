@@ -54,6 +54,15 @@ Backend tersedia pada `http://localhost:3001/api`. Frontend dan backend dapat di
 npm run dev:all
 ```
 
+Untuk menjalankan frontend dengan integrasi backend aktif, set konfigurasi berikut di `.env` lokal atau pada terminal yang menjalankan Vite:
+
+```text
+VITE_API_BASE_URL=http://localhost:3001/api
+VITE_USE_BACKEND_API=true
+```
+
+Default `.env.example` tetap memakai `VITE_USE_BACKEND_API=false` agar demo Day 1 dapat berjalan tanpa backend.
+
 ## Script NPM
 
 | Command | Deskripsi |
@@ -77,6 +86,8 @@ Respons sukses menggunakan `{ "data": ..., "meta": ... }`. Respons gagal menggun
 | Method | Endpoint | Deskripsi |
 | --- | --- | --- |
 | GET | `/api/health` | Health check API dan database. |
+| POST | `/api/auth/login` | Login demo berbasis email dan demo code. |
+| GET | `/api/auth/me` | Mengambil profil user dari bearer token demo. |
 | GET | `/api/roles` | Daftar role. |
 | GET | `/api/users` | Daftar user. |
 | GET | `/api/users/:id` | Detail user. |
@@ -123,24 +134,62 @@ POST /api/qc-checklists
 
 ## Frontend API Bridge
 
-Service API tersedia di `src/services`, tetapi belum dihubungkan ke `AppDataContext`. Default `VITE_USE_BACKEND_API=false`, sehingga seluruh demo Day 1 tetap memakai localStorage.
+Service API tersedia di `src/services` dan sudah dihubungkan secara bertahap ke `AppDataContext`. Saat `VITE_USE_BACKEND_API=true`, frontend mencoba membaca data roles, users, projects, warehouses, work items, QC checklists, dan audit logs dari backend.
+
+Jika backend mati, request gagal, atau `VITE_USE_BACKEND_API=false`, aplikasi tetap memakai localStorage fallback agar demo Day 1 tidak rusak.
+
+Mutation yang sudah backend-aware:
+
+- `PATCH /api/work-items/:id/status` untuk update status produksi.
+- `POST /api/qc-checklists` untuk submit QC checklist.
+- Refresh audit logs setelah mutation backend berhasil.
+
+## Authentication and RBAC - Day 3
+
+Login demo tersedia di route `/login`.
+
+Backend auth demo:
+
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+
+Auth memakai email dan demo code, lalu menyimpan session minimal di localStorage. Jika backend auth tidak tersedia, frontend memakai local demo users. Token backend adalah signed demo token sederhana, bukan JWT production.
 
 ## Demo Accounts
 
-Role login masih disimulasikan melalui role switcher di top bar.
+Shared demo code untuk semua akun: `demo123`.
 
-| User | Role | Demo Use |
-| --- | --- | --- |
-| Rina Wijaya | Owner | Melihat dashboard dan audit trail. |
-| Budi Santoso | Production Manager | Monitoring produksi dan update work item. |
-| Joko Anwar | Foreman | Update status pekerjaan produksi. |
-| Siti Nurhaliza | QC Inspector | Submit Digital QC Checklist. |
-| Dewi Lestari | Admin | Akses demo penuh. |
+| Email | User | Role | Demo Use |
+| --- | --- | --- | --- |
+| `rina.wijaya@simo.test` | Rina Wijaya | Owner | Melihat dashboard dan audit trail. |
+| `budi.santoso@simo.test` | Budi Santoso | Production Manager | Monitoring produksi dan update work item. |
+| `joko.anwar@simo.test` | Joko Anwar | Foreman | Update status pekerjaan produksi. |
+| `siti.nurhaliza@simo.test` | Siti Nurhaliza | QC Inspector | Submit Digital QC Checklist. |
+| `dewi.lestari@simo.test` | Dewi Lestari | Admin | Akses demo penuh. |
+
+User-specific demo codes juga tersedia di kode untuk pengujian internal:
+
+- `owner-demo`
+- `pm-demo`
+- `foreman-demo`
+- `qc-demo`
+- `admin-demo`
+
+## Role Access Table
+
+| Role | Dashboard | Warehouses | QC | Audit Logs | Logistics |
+| --- | --- | --- | --- | --- | --- |
+| Owner | Yes | No | No | Yes | No |
+| Production Manager | Yes | Yes | No | Yes | No |
+| Foreman | No | Yes | No | No | No |
+| QC Inspector | No | No | Yes | No | No |
+| Admin | Yes | Yes | Yes | Yes | Yes |
 
 ## Halaman Aplikasi
 
 | Route | Halaman | Deskripsi |
 | --- | --- | --- |
+| `/login` | Login | Demo login berbasis email dan demo code. |
 | `/` | Dashboard | Ringkasan project, warehouse, work item, progress produksi, dan shipping gate. |
 | `/warehouses` | Production Work Items | Update status work item dan monitoring warehouse. |
 | `/qc` | Digital QC Checklist | Submit checklist QC dan menentukan status ready to ship. |
@@ -188,25 +237,43 @@ Role login masih disimulasikan melalui role switcher di top bar.
 - Integration test backend berbasis `node:test`.
 - Dokumentasi plan dan summary Day 2.
 
+## Completed Features - Day 3 Frontend-Backend Integration
+
+- `DAY3_INTEGRATION_PLAN.md` dibuat setelah scan direktori.
+- API client layer ditingkatkan dengan base URL config, timeout, token support, dan error handling.
+- Service file ditambahkan untuk auth, projects, warehouses, roles, dan users.
+- Dashboard membaca data backend melalui `AppDataContext` saat API mode aktif.
+- Warehouses page update status melalui backend dan tetap fallback ke localStorage jika gagal.
+- QC page submit checklist melalui backend dan tetap fallback ke localStorage jika gagal.
+- Audit logs direfresh setelah mutation backend berhasil.
+- Login page ditambahkan.
+- `AuthContext` dan protected route behavior ditambahkan.
+- Sidebar menu mengikuti role login.
+- Backend auth demo endpoint ditambahkan.
+- Backend test ditambah untuk login dan `/api/auth/me`.
+
 ## Demo Flow
 
-1. Pilih `Joko Anwar - Foreman`.
+1. Login sebagai `joko.anwar@simo.test` dengan demo code `demo123`.
 2. Buka `Warehouses`.
 3. Ubah status work item menjadi `In-Progress` atau `Done`.
-4. Pilih `Rina Wijaya - Owner` atau `Budi Santoso - Production Manager`.
-5. Buka `Dashboard` dan cek progress produksi.
-6. Pilih `Siti Nurhaliza - QC Inspector`.
-7. Buka `QC`.
-8. Submit checklist dengan status `Passed QC` atau `Rework`.
-9. Buka `Audit Logs` dan cek riwayat aktivitas.
+4. Logout.
+5. Login sebagai `rina.wijaya@simo.test` atau `budi.santoso@simo.test`.
+6. Buka `Dashboard` dan cek progress produksi.
+7. Buka `Audit Logs` dan cek riwayat aktivitas.
+8. Logout.
+9. Login sebagai `siti.nurhaliza@simo.test`.
+10. Buka `QC`.
+11. Submit checklist dengan status `Passed QC` atau `Rework`.
+12. Login sebagai user yang punya akses audit untuk melihat riwayat QC.
 
 ## Unfinished Features
 
-- Frontend belum membaca atau menulis ke backend API.
-- Authentication masih simulasi role switcher.
+- Backend RBAC enforcement belum tersedia; RBAC Day 3 masih di frontend.
+- Password hashing belum digunakan karena auth memakai demo code, bukan password production.
 - Evidence photo masih berupa filename/reference, belum upload file.
 - Logistics masih halaman statis.
-- Full RBAC dan hardening production belum tersedia.
+- Full auth hardening production belum tersedia.
 - Schema memakai file SQL idempotent, belum memakai migration framework.
 
 ## Verification
@@ -221,6 +288,18 @@ npm run db:seed
 ```
 
 Seluruh perintah berhasil.
+
+Day 3 juga diverifikasi dengan live backend endpoint checks untuk:
+
+- `GET /api/health`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `GET /api/projects`
+- `GET /api/warehouses`
+- `GET /api/work-items`
+- `PATCH /api/work-items/:id/status`
+- `POST /api/qc-checklists`
+- `GET /api/audit-logs`
 
 ## Next Development Plan
 

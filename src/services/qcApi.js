@@ -1,15 +1,15 @@
-import { apiRequest } from './apiClient';
+import { apiData } from './apiClient';
 
 export function getQcChecklists() {
-  return apiRequest('/qc-checklists');
+  return apiData('/qc-checklists');
 }
 
 export function getQcChecklist(id) {
-  return apiRequest(`/qc-checklists/${encodeURIComponent(id)}`);
+  return apiData(`/qc-checklists/${encodeURIComponent(id)}`);
 }
 
 export function submitQcChecklist(payload) {
-  return apiRequest('/qc-checklists', {
+  return apiData('/qc-checklists', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

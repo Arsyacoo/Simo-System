@@ -52,6 +52,7 @@ export default function QualityControl() {
   const {
     data,
     activeUser,
+    isMutating,
     permissions,
     projectsById,
     warehousesById,
@@ -96,14 +97,14 @@ export default function QualityControl() {
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!permissions.canSubmitQc) {
+    if (!permissions.canSubmitQc || isMutating) {
       return;
     }
 
-    submitQcChecklist(form);
+    await submitQcChecklist(form);
     setForm((currentForm) => ({
       ...currentForm,
       length: '',
@@ -126,11 +127,13 @@ export default function QualityControl() {
         <div
           className={`rounded-lg border px-4 py-3 text-sm font-semibold ${
             permissions.canSubmitQc
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
               : 'border-amber-200 bg-amber-50 text-amber-700'
           }`}
         >
-          {permissions.canSubmitQc ? `${activeUser.roleName} QC access` : `${activeUser.roleName} view only`}
+          {permissions.canSubmitQc
+            ? `${activeUser.roleName} QC access${isMutating ? ' - saving' : ''}`
+            : `${activeUser.roleName} view only`}
         </div>
       </div>
 
@@ -162,7 +165,7 @@ export default function QualityControl() {
             <h2 className="text-lg font-bold text-slate-800">Checklist Form</h2>
           </div>
 
-          <fieldset disabled={!permissions.canSubmitQc} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <fieldset disabled={!permissions.canSubmitQc || isMutating} className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <FieldLabel>Project</FieldLabel>
               <select
@@ -304,11 +307,11 @@ export default function QualityControl() {
             <p className="text-sm font-medium text-slate-500">{statusHelp[form.qcStatus]}</p>
             <button
               type="submit"
-              disabled={!permissions.canSubmitQc}
+              disabled={!permissions.canSubmitQc || isMutating}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               <ClipboardCheck size={18} />
-              Submit Checklist
+              {isMutating ? 'Submitting...' : 'Submit Checklist'}
             </button>
           </div>
         </form>
