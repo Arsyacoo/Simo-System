@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { all, get, run, withTransaction } from '../db/database.js';
+import { requireAuth } from '../utils/auth.js';
 import { resolveActor, writeAuditLog } from '../utils/auditLogger.js';
 import {
   asyncHandler,
@@ -27,8 +28,9 @@ export function createWorkItemsRouter(db) {
     sendData(res, serializeWorkItem(row));
   }));
 
-  router.patch('/:id/status', asyncHandler(async (req, res) => {
-    const { status, userId } = req.body || {};
+  router.patch('/:id/status', requireAuth, asyncHandler(async (req, res) => {
+    const { status } = req.body || {};
+    const userId = req.user.id;
 
     if (!WORK_STATUS_OPTIONS.includes(status)) {
       throw new HttpError(

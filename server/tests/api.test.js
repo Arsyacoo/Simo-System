@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, before, test } from 'node:test';
+import { after, before, beforeEach, test } from 'node:test';
 import { createApp } from '../app.js';
 import { closeDatabase, createDatabase, get } from '../db/database.js';
 import { seedDatabase } from '../seed/seedDatabase.js';
@@ -7,14 +7,19 @@ import { seedDatabase } from '../seed/seedDatabase.js';
 let db;
 let server;
 let baseUrl;
+let currentToken = null;
 
 async function request(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  if (currentToken && !headers.Authorization) {
+    headers.Authorization = `Bearer ${currentToken}`;
+  }
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   });
   const body = await response.json();
   return { response, body };
@@ -33,6 +38,10 @@ after(async () => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
   await closeDatabase(db);
+});
+
+beforeEach(() => {
+  currentToken = null;
 });
 
 test('health and collection endpoints return data envelopes', async () => {
@@ -86,10 +95,17 @@ test('audit logs support module and user filters', async () => {
 });
 
 test('work item status mutation creates one audit and no-op creates none', async () => {
+  // Login as foreman
+  const loginRes = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'joko.anwar@simo.test', password: 'password' }),
+  });
+  currentToken = loginRes.body.data.token;
+
   const beforeCount = await get(db, 'SELECT COUNT(*) AS count FROM audit_logs');
   const updated = await request('/api/work-items/wi-002/status', {
     method: 'PATCH',
-    body: JSON.stringify({ status: 'Done', userId: 'usr-foreman' }),
+    body: JSON.stringify({ status: 'Done' }),
   });
 
   assert.equal(updated.response.status, 200);
@@ -101,35 +117,44 @@ test('work item status mutation creates one audit and no-op creates none', async
 
   const noOp = await request('/api/work-items/wi-002/status', {
     method: 'PATCH',
-    body: JSON.stringify({ status: 'Done', userId: 'usr-foreman' }),
+    body: JSON.stringify({ status: 'Done' }),
   });
   assert.equal(noOp.response.status, 200);
   assert.equal(noOp.body.meta.auditCreated, false);
 
   const afterNoOpCount = await get(db, 'SELECT COUNT(*) AS count FROM audit_logs');
   assert.equal(afterNoOpCount.count, afterUpdateCount.count);
+  
+  currentToken = null; // reset
 });
 
-test('missing userId records the System actor', async () => {
-  const updated = await request('/api/work-items/wi-006/status', {
+test('unauthorized or invalid token requests return 401 errors', async () => {
+  // Try status patch without token
+  const noToken = await request('/api/work-items/wi-006/status', {
     method: 'PATCH',
     body: JSON.stringify({ status: 'In-Progress' }),
   });
-  assert.equal(updated.response.status, 200);
+  assert.equal(noToken.response.status, 401);
+  assert.equal(noToken.body.error.code, 'UNAUTHORIZED');
 
-  const audit = await get(
-    db,
-    `SELECT * FROM audit_logs
-     WHERE entity_id = ? AND action_type = ?
-     ORDER BY created_at DESC, id DESC
-     LIMIT 1`,
-    ['wi-006', 'UPDATE_WORK_STATUS'],
-  );
-  assert.equal(audit.user_name, 'System');
-  assert.equal(audit.role_name, 'System');
+  // Try status patch with invalid token
+  const invalidToken = await request('/api/work-items/wi-006/status', {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer invalid-token-value' },
+    body: JSON.stringify({ status: 'In-Progress' }),
+  });
+  assert.equal(invalidToken.response.status, 401);
+  assert.equal(invalidToken.body.error.code, 'INVALID_TOKEN');
 });
 
 test('QC submission updates shipping gate and creates an audit log', async () => {
+  // Login as QC inspector
+  const loginRes = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'siti.nurhaliza@simo.test', password: 'password' }),
+  });
+  currentToken = loginRes.body.data.token;
+
   const beforeCount = await get(db, 'SELECT COUNT(*) AS count FROM audit_logs');
   const created = await request('/api/qc-checklists', {
     method: 'POST',
@@ -142,7 +167,6 @@ test('QC submission updates shipping gate and creates an audit log', async () =>
       qcStatus: 'Passed QC',
       notes: 'Dimensions accepted.',
       evidencePhotoReference: 'lockset-a.jpg',
-      userId: 'usr-qc',
     }),
   });
 
@@ -156,19 +180,24 @@ test('QC submission updates shipping gate and creates an audit log', async () =>
 
   const afterCount = await get(db, 'SELECT COUNT(*) AS count FROM audit_logs');
   assert.equal(afterCount.count, beforeCount.count + 1);
+
+  currentToken = null; // reset
 });
 
 test('invalid IDs, payloads, users, and routes return consistent errors', async () => {
+  // Login as admin
+  const loginRes = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'dewi.lestari@simo.test', password: 'password' }),
+  });
+  currentToken = loginRes.body.data.token;
+
   const cases = [
     ['/api/users/missing', {}, 404, 'NOT_FOUND'],
     ['/api/work-items/wi-001/status', {
       method: 'PATCH',
       body: JSON.stringify({ status: 'Invalid' }),
     }, 400, 'VALIDATION_ERROR'],
-    ['/api/work-items/wi-001/status', {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'Done', userId: 'missing' }),
-    }, 400, 'INVALID_USER'],
     ['/api/qc-checklists', {
       method: 'POST',
       body: JSON.stringify({ workItemId: 'wi-001' }),
@@ -181,6 +210,8 @@ test('invalid IDs, payloads, users, and routes return consistent errors', async 
     assert.equal(response.status, expectedStatus, path);
     assert.equal(body.error.code, expectedCode, path);
   }
+
+  currentToken = null; // reset
 });
 
 test('seed command remains idempotent', async () => {

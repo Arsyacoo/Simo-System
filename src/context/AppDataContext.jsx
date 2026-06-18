@@ -2,8 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createInitialDemoState } from '../data/seedData';
 import { AppDataContext } from './AppDataCore';
 
+import { useBackendApi, apiRequest } from '../services/apiClient';
+import { getWorkItems, updateWorkItemStatus as updateWorkItemStatusApi } from '../services/workItemsApi';
+import { getQcChecklists, submitQcChecklist as submitQcChecklistApi } from '../services/qcApi';
+import { getAuditLogs } from '../services/auditLogsApi';
+
 const STORAGE_KEY = 'simo-mugi-jaya-demo-state';
 const ACTIVE_USER_KEY = 'simo-mugi-jaya-active-user';
+const TOKEN_KEY = 'simo-mugi-jaya-token';
 
 function timestampNow() {
   return new Date().toLocaleString('sv-SE', { hour12: false });
@@ -15,6 +21,22 @@ function loadDemoState() {
     return saved ? JSON.parse(saved) : createInitialDemoState();
   } catch {
     return createInitialDemoState();
+  }
+}
+
+function decodeJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
   }
 }
 
@@ -30,6 +52,16 @@ function buildAuditLog(activeUser, details) {
 
 export function AppDataProvider({ children }) {
   const [data, setData] = useState(loadDemoState);
+  const [isOffline, setIsOffline] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [token, setToken] = useState(() => {
+    try {
+      return window.localStorage.getItem(TOKEN_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
+
   const [activeUserId, setActiveUserId] = useState(() => {
     try {
       return window.localStorage.getItem(ACTIVE_USER_KEY) || 'usr-owner';
@@ -38,13 +70,10 @@ export function AppDataProvider({ children }) {
     }
   });
 
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
-
-  useEffect(() => {
-    window.localStorage.setItem(ACTIVE_USER_KEY, activeUserId);
-  }, [activeUserId]);
+  const decodedUser = useMemo(() => {
+    if (!token) return null;
+    return decodeJwt(token);
+  }, [token]);
 
   const rolesById = useMemo(
     () => new Map(data.roles.map((role) => [role.id, role])),
@@ -60,10 +89,23 @@ export function AppDataProvider({ children }) {
     [data.users, rolesById],
   );
 
-  const activeUser = useMemo(
-    () => users.find((user) => user.id === activeUserId) || users[0],
-    [activeUserId, users],
-  );
+  const activeUser = useMemo(() => {
+    if (useBackendApi && decodedUser) {
+      return {
+        id: decodedUser.id,
+        name: decodedUser.name,
+        email: decodedUser.email,
+        roleId: decodedUser.roleId,
+        roleName: decodedUser.roleName,
+        site: 'HQ / Cloud',
+      };
+    }
+    return users.find((user) => user.id === activeUserId) || users[0];
+  }, [activeUserId, users, decodedUser, token]);
+
+  const activeUserIdResolved = useMemo(() => {
+    return activeUser?.id || activeUserId;
+  }, [activeUser, activeUserId]);
 
   const permissions = useMemo(() => {
     const roleId = activeUser?.roleId;
@@ -137,8 +179,112 @@ export function AppDataProvider({ children }) {
     };
   }, [data.projects, data.warehouses, data.workItems, projectsById]);
 
+  const fetchData = useCallback(async (customToken = token) => {
+    if (!useBackendApi) return;
+    if (useBackendApi && !customToken) return;
+
+    setIsLoading(true);
+    try {
+      const headers = customToken ? { Authorization: `Bearer ${customToken}` } : {};
+      const [
+        rolesRes,
+        usersRes,
+        projectsRes,
+        warehousesRes,
+        workItemsRes,
+        qcChecklistsRes,
+        auditLogsRes
+      ] = await Promise.all([
+        apiRequest('/roles', { headers }),
+        apiRequest('/users', { headers }),
+        apiRequest('/projects', { headers }),
+        apiRequest('/warehouses', { headers }),
+        getWorkItems(),
+        getQcChecklists(),
+        getAuditLogs()
+      ]);
+
+      setData({
+        roles: rolesRes.data,
+        users: usersRes.data,
+        projects: projectsRes.data,
+        warehouses: warehousesRes.data,
+        workItems: workItemsRes.data,
+        qcChecklists: qcChecklistsRes.data,
+        auditLogs: auditLogsRes.data,
+      });
+      setIsOffline(false);
+    } catch (err) {
+      console.error("API error, falling back to localStorage:", err);
+      setIsOffline(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token]);
+
+  // Load from backend on mount if enabled
+  useEffect(() => {
+    if (useBackendApi && token) {
+      fetchData();
+    }
+  }, [token, fetchData]);
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [data]);
+
+  useEffect(() => {
+    window.localStorage.setItem(ACTIVE_USER_KEY, activeUserId);
+  }, [activeUserId]);
+
+  const login = useCallback(async (email, password) => {
+    try {
+      const res = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      const { token: receivedToken, user } = res.data;
+      window.localStorage.setItem(TOKEN_KEY, receivedToken);
+      setToken(receivedToken);
+      setIsOffline(false);
+      
+      await fetchData(receivedToken);
+      return user;
+    } catch (err) {
+      console.error("Login failed:", err);
+      throw err;
+    }
+  }, [fetchData]);
+
+  const logout = useCallback(() => {
+    window.localStorage.removeItem(TOKEN_KEY);
+    setToken(null);
+  }, []);
+
   const updateWorkItemStatus = useCallback(
-    (workItemId, nextStatus) => {
+    async (workItemId, nextStatus) => {
+      if (useBackendApi && !isOffline && token) {
+        try {
+          await updateWorkItemStatusApi(workItemId, nextStatus, activeUserIdResolved);
+          
+          const [workItemsRes, auditLogsRes] = await Promise.all([
+            getWorkItems(),
+            getAuditLogs()
+          ]);
+
+          setData((current) => ({
+            ...current,
+            workItems: workItemsRes.data,
+            auditLogs: auditLogsRes.data,
+          }));
+          return;
+        } catch (err) {
+          console.error("Failed to update work item on server, falling back:", err);
+          setIsOffline(true);
+        }
+      }
+
+      // LocalStorage Fallback
       setData((currentData) => {
         const workItem = currentData.workItems.find((item) => item.id === workItemId);
 
@@ -166,11 +312,54 @@ export function AppDataProvider({ children }) {
         };
       });
     },
-    [activeUser],
+    [activeUser, activeUserIdResolved, isOffline, token],
   );
 
   const submitQcChecklist = useCallback(
-    (payload) => {
+    async (payload) => {
+      if (useBackendApi && !isOffline && token) {
+        try {
+          let body;
+          if (payload.file) {
+            body = new FormData();
+            body.append('workItemId', payload.workItemId);
+            body.append('materialName', payload.materialName);
+            body.append('notes', payload.notes);
+            body.append('length', payload.length);
+            body.append('width', payload.width);
+            body.append('thickness', payload.thickness);
+            body.append('qcStatus', payload.qcStatus);
+            body.append('evidencePhoto', payload.file);
+            body.append('userId', activeUserIdResolved);
+          } else {
+            body = {
+              ...payload,
+              userId: activeUserIdResolved,
+            };
+          }
+
+          await submitQcChecklistApi(body);
+
+          const [workItemsRes, qcChecklistsRes, auditLogsRes] = await Promise.all([
+            getWorkItems(),
+            getQcChecklists(),
+            getAuditLogs()
+          ]);
+
+          setData((current) => ({
+            ...current,
+            workItems: workItemsRes.data,
+            qcChecklists: qcChecklistsRes.data,
+            auditLogs: auditLogsRes.data,
+          }));
+          return;
+        } catch (err) {
+          console.error("Failed to submit QC on server, falling back:", err);
+          setIsOffline(true);
+        }
+      }
+
+      // LocalStorage Fallback
       setData((currentData) => {
         const workItem = currentData.workItems.find((item) => item.id === payload.workItemId);
         const checklist = {
@@ -211,7 +400,7 @@ export function AppDataProvider({ children }) {
         };
       });
     },
-    [activeUser],
+    [activeUser, activeUserIdResolved, isOffline, token],
   );
 
   const resetDemoData = useCallback(() => {
@@ -224,7 +413,7 @@ export function AppDataProvider({ children }) {
       data,
       users,
       activeUser,
-      activeUserId,
+      activeUserId: activeUserIdResolved,
       setActiveUserId,
       permissions,
       projectsById,
@@ -233,12 +422,17 @@ export function AppDataProvider({ children }) {
       updateWorkItemStatus,
       submitQcChecklist,
       resetDemoData,
+      isOffline,
+      isLoading,
+      token,
+      login,
+      logout,
     }),
     [
       data,
       users,
       activeUser,
-      activeUserId,
+      activeUserIdResolved,
       permissions,
       projectsById,
       warehousesById,
@@ -246,6 +440,11 @@ export function AppDataProvider({ children }) {
       updateWorkItemStatus,
       submitQcChecklist,
       resetDemoData,
+      isOffline,
+      isLoading,
+      token,
+      login,
+      logout,
     ],
   );
 

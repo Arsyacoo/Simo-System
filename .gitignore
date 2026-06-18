@@ -35,3 +35,8 @@ server/db/*.db-*
 *.njsproj
 *.sln
 *.sw?
+
+# local uploads
+server/public/uploads/*
+!server/public/uploads/.gitkeep
+

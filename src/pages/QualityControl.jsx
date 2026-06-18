@@ -59,6 +59,7 @@ export default function QualityControl() {
   } = useAppData();
 
   const [form, setForm] = useState(() => buildFormFromItem(data.workItems[0]));
+  const [file, setFile] = useState(null);
 
   const filteredWorkItems = useMemo(
     () => data.workItems.filter((item) => item.projectId === form.projectId),
@@ -103,7 +104,8 @@ export default function QualityControl() {
       return;
     }
 
-    submitQcChecklist(form);
+    submitQcChecklist({ ...form, file });
+    setFile(null);
     setForm((currentForm) => ({
       ...currentForm,
       length: '',
@@ -280,9 +282,9 @@ export default function QualityControl() {
               <div className="relative">
                 <Upload className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input
-                  value={form.evidencePhoto}
-                  onChange={(event) => handleChange('evidencePhoto', event.target.value)}
-                  placeholder="qc-evidence-file.jpg"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => setFile(event.target.files[0] || null)}
                   className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
                 />
               </div>
@@ -365,6 +367,7 @@ export default function QualityControl() {
                 <th className="px-5 py-4">Material</th>
                 <th className="px-5 py-4">Dimension</th>
                 <th className="px-5 py-4">Status</th>
+                <th className="px-5 py-4">Evidence</th>
                 <th className="px-5 py-4">Inspector</th>
                 <th className="px-5 py-4">Notes</th>
               </tr>
@@ -381,6 +384,29 @@ export default function QualityControl() {
                     <span className={`rounded border px-2.5 py-1 text-xs font-bold ${qcStyles[record.qcStatus]}`}>
                       {record.qcStatus}
                     </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    {record.evidencePhoto ? (
+                      record.evidencePhoto.endsWith('.jpg') || record.evidencePhoto.endsWith('.png') || record.evidencePhoto.endsWith('.jpeg') || record.evidencePhoto.startsWith('qc-') ? (
+                        <img
+                          src={
+                            record.evidencePhoto.startsWith('http')
+                              ? record.evidencePhoto
+                              : `${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api').replace('/api', '')}/uploads/${record.evidencePhoto}`
+                          }
+                          alt="Evidence"
+                          className="h-10 w-10 rounded-lg object-cover border border-slate-200 shadow-sm cursor-pointer hover:scale-105 transition-transform"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                          onClick={(e) => window.open(e.target.src, '_blank')}
+                        />
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">{record.evidencePhoto}</span>
+                      )
+                    ) : (
+                      <span className="text-xs text-slate-400">-</span>
+                    )}
                   </td>
                   <td className="px-5 py-4 text-sm text-slate-600">{record.createdBy}</td>
                   <td className="px-5 py-4 text-sm text-slate-500">{record.notes}</td>

@@ -1,6 +1,8 @@
 import cors from 'cors';
+import path from 'node:path';
 import express from 'express';
 import { get } from './db/database.js';
+import { createAuthRouter } from './routes/auth.js';
 import { createAuditLogsRouter } from './routes/auditLogs.js';
 import { createProjectsRouter } from './routes/projects.js';
 import { createQcChecklistsRouter } from './routes/qcChecklists.js';
@@ -22,6 +24,7 @@ export function createApp({ db }) {
   app.disable('x-powered-by');
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
+  app.use('/uploads', express.static(path.resolve(process.cwd(), 'server/public/uploads')));
 
   app.get('/api/health', asyncHandler(async (req, res) => {
     await get(db, 'SELECT 1 AS ok');
@@ -32,6 +35,7 @@ export function createApp({ db }) {
     });
   }));
 
+  app.use('/api/auth', createAuthRouter(db));
   app.use('/api/roles', createRolesRouter(db));
   app.use('/api/users', createUsersRouter(db));
   app.use('/api/projects/:projectId/warehouses', createProjectWarehousesRouter(db));
@@ -77,7 +81,7 @@ export function createApp({ db }) {
       return res.status(error.status).json({ error: payload });
     }
 
-    if (error?.code?.startsWith('SQLITE_CONSTRAINT')) {
+    if (error?.code?.startsWith('SQLITE_CONSTRAINT') || error?.code?.startsWith('23')) {
       return res.status(400).json({
         error: {
           code: 'DATABASE_CONSTRAINT',

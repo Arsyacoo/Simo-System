@@ -4,12 +4,22 @@ export const useBackendApi =
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api').replace(/\/$/, '');
 
 export async function apiRequest(path, options = {}) {
+  const token = window.localStorage.getItem('simo-mugi-jaya-token');
+  const headers = {
+    ...options.headers,
+  };
+
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   });
 
   const payload = await response.json().catch(() => null);

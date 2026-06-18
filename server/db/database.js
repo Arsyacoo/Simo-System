@@ -1,116 +1,105 @@
 import fs from 'node:fs/promises';
-import path from 'node:path';
-import sqlite3 from 'sqlite3';
+import pg from 'pg';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
-const DEFAULT_DATABASE_PATH = 'server/db/simo.sqlite';
+// Parse BIGINT (type OID 20) as standard Javascript integers
+pg.types.setTypeParser(20, (val) => parseInt(val, 10));
+
 const SCHEMA_PATH = new URL('./schema.sql', import.meta.url);
+const txStorage = new AsyncLocalStorage();
 
-export function resolveDatabasePath(databasePath = process.env.DATABASE_PATH || DEFAULT_DATABASE_PATH) {
-  return databasePath === ':memory:' ? databasePath : path.resolve(process.cwd(), databasePath);
-}
-
-export async function openDatabase(databasePath) {
-  const filename = resolveDatabasePath(databasePath);
-
-  if (filename !== ':memory:') {
-    await fs.mkdir(path.dirname(filename), { recursive: true });
+export function translateSql(sql) {
+  // Strip out any SQLite specific PRAGMA commands
+  let translated = sql.replace(/PRAGMA\s+[^;]+;?/gi, '');
+  
+  // Replace SQLite placeholder "?" with PostgreSQL placeholder "$1", "$2", etc.
+  let index = 1;
+  translated = translated.replace(/\?/g, () => `$${index++}`);
+  
+  // Replace SQLite specific "INSERT OR IGNORE INTO" with PostgreSQL "INSERT INTO ... ON CONFLICT (id) DO NOTHING"
+  if (translated.toUpperCase().includes('INSERT OR IGNORE INTO')) {
+    translated = translated.replace(/INSERT OR IGNORE INTO/i, 'INSERT INTO');
+    translated += ' ON CONFLICT (id) DO NOTHING';
   }
-
-  const db = await new Promise((resolve, reject) => {
-    const connection = new sqlite3.Database(filename, (error) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(connection);
-      }
-    });
-  });
-
-  await exec(db, 'PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
-  return db;
+  return translated;
 }
 
-export async function initializeDatabase(db) {
+export async function openDatabase(databasePath = process.env.DATABASE_URL) {
+  const connectionString = databasePath === ':memory:'
+    ? (process.env.DATABASE_URL_TEST || process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/simo_test')
+    : (databasePath || process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/simo');
+
+  const pool = new pg.Pool({ connectionString });
+  
+  // Quick sanity check to verify connection parameters
+  const client = await pool.connect();
+  client.release();
+  
+  return { pool };
+}
+
+export async function initializeDatabase(db, dropTables = false) {
   const schema = await fs.readFile(SCHEMA_PATH, 'utf8');
+  if (dropTables) {
+    const tables = ['audit_logs', 'qc_checklists', 'work_items', 'warehouses', 'projects', 'users', 'roles'];
+    for (const table of tables) {
+      await exec(db, `DROP TABLE IF EXISTS ${table} CASCADE`);
+    }
+  }
   await exec(db, schema);
   return db;
 }
 
 export async function createDatabase(databasePath) {
   const db = await openDatabase(databasePath);
-  await initializeDatabase(db);
+  const isTest = databasePath === ':memory:';
+  await initializeDatabase(db, isTest);
   return db;
 }
 
-export function run(db, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function onRun(error) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve({ lastID: this.lastID, changes: this.changes });
-      }
-    });
-  });
+function getActiveClient(db) {
+  const txClient = txStorage.getStore();
+  return txClient || db.pool;
 }
 
-export function get(db, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (error, row) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(row);
-      }
-    });
-  });
+export async function run(db, sql, params = []) {
+  const client = getActiveClient(db);
+  const res = await client.query(translateSql(sql), params);
+  return { lastID: null, changes: res.rowCount };
 }
 
-export function all(db, sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (error, rows) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
+export async function get(db, sql, params = []) {
+  const client = getActiveClient(db);
+  const res = await client.query(translateSql(sql), params);
+  return res.rows[0] || null;
 }
 
-export function exec(db, sql) {
-  return new Promise((resolve, reject) => {
-    db.exec(sql, (error) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve();
-      }
-    });
-  });
+export async function all(db, sql, params = []) {
+  const client = getActiveClient(db);
+  const res = await client.query(translateSql(sql), params);
+  return res.rows;
 }
 
-export function closeDatabase(db) {
-  return new Promise((resolve, reject) => {
-    db.close((error) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve();
-      }
-    });
-  });
+export async function exec(db, sql) {
+  const client = getActiveClient(db);
+  await client.query(translateSql(sql));
+}
+
+export async function closeDatabase(db) {
+  await db.pool.end();
 }
 
 export async function withTransaction(db, operation) {
-  await exec(db, 'BEGIN IMMEDIATE TRANSACTION');
-
+  const client = await db.pool.connect();
   try {
-    const result = await operation();
-    await exec(db, 'COMMIT');
+    await client.query('BEGIN');
+    const result = await txStorage.run(client, operation);
+    await client.query('COMMIT');
     return result;
   } catch (error) {
-    await exec(db, 'ROLLBACK');
+    await client.query('ROLLBACK');
     throw error;
+  } finally {
+    client.release();
   }
 }

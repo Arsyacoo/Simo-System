@@ -9,8 +9,9 @@ export function getQcChecklist(id) {
 }
 
 export function submitQcChecklist(payload) {
+  const isFormData = payload instanceof FormData;
   return apiRequest('/qc-checklists', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: isFormData ? payload : JSON.stringify(payload),
   });
 }

@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import fs from 'node:fs';
 import { Router } from 'express';
+import multer from 'multer';
 import { all, get, run, withTransaction } from '../db/database.js';
+import { requireAuth } from '../utils/auth.js';
 import { resolveActor, writeAuditLog } from '../utils/auditLogger.js';
 import {
   asyncHandler,
@@ -13,6 +17,34 @@ import {
 import { serializeQcChecklist } from '../utils/serializers.js';
 
 const QC_STATUS_OPTIONS = ['Pending', 'Passed QC', 'Rework'];
+
+const uploadDir = path.resolve(process.cwd(), 'server/public/uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `qc-${uniqueSuffix}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Hanya file gambar yang diperbolehkan!'));
+    }
+  },
+});
 
 export function createQcChecklistsRouter(db) {
   const router = Router();
@@ -30,7 +62,7 @@ export function createQcChecklistsRouter(db) {
     sendData(res, serializeQcChecklist(row));
   }));
 
-  router.post('/', asyncHandler(async (req, res) => {
+  router.post('/', requireAuth, upload.single('evidencePhoto'), asyncHandler(async (req, res) => {
     const payload = req.body || {};
     const workItemId = requireNonEmptyString(payload.workItemId, 'workItemId');
     const materialName = requireNonEmptyString(payload.materialName, 'materialName');
@@ -52,11 +84,11 @@ export function createQcChecklistsRouter(db) {
       await get(db, 'SELECT * FROM work_items WHERE id = ?', [workItemId]),
       'Work item',
     );
-    const actor = await resolveActor(db, payload.userId);
+    const actor = await resolveActor(db, req.user.id);
     const checklistId = `qc-${randomUUID()}`;
-    const evidenceReference = String(
-      payload.evidencePhotoReference ?? payload.evidencePhoto ?? '',
-    ).trim();
+    const evidenceReference = req.file
+      ? req.file.filename
+      : String(payload.evidencePhotoReference ?? payload.evidencePhoto ?? '').trim();
 
     const checklist = await withTransaction(db, async () => {
       await run(
