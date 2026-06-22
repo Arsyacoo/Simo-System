@@ -1,153 +1,197 @@
-# SIMO Mugi Jaya
+﻿# SIMO Mugi Jaya
 
-SIMO Mugi Jaya adalah *Operational Management Information System* (OMIS) tingkat produksi yang dirancang untuk mengelola dan memantau proses Produksi (*Production Progress Monitoring*), Logistik (*Logistics Tracking*), dan Pengendalian Kualitas (*Digital Quality Control Checklist*). 
+SIMO Mugi Jaya is a full-stack Operational Management Information System for production, warehouse execution, quality control, audit logging, and logistics manifest monitoring.
 
-Aplikasi ini dikembangkan dengan arsitektur terpisah (*decoupled architecture*) menggunakan React di frontend dan Express.js di backend, serta ditenagai oleh database relasional PostgreSQL untuk penyimpanan cloud-native.
+The project is now organized as a clean monorepo with separate frontend and backend apps.
 
----
+## Directory Structure
 
-## 🚀 Fitur Utama & Rangkaian Perkembangan
-
-### 📦 Day 1: UI/UX MVP (Frontend Prototype)
-* **Interactive Dashboard**: Visualisasi progres proyek manufaktur dan kapasitas muat gudang secara real-time.
-* **Kanban Board Work Items**: Papan status seret-dan-lepas dinamis (To-Do, In-Progress, Done) untuk pengelolaan tugas lantai produksi.
-* **Digital QC Form**: Formulir inspeksi kualitas dimensi material dengan status QC (Pending, Passed QC, Rework) terintegrasi ke gerbang pengiriman (*shipping gate*).
-* **Audit Trail UI**: Log pencatatan aktivitas pengguna otomatis yang dilengkapi dengan filter pencarian dan opsi ekspor data ke berkas CSV.
-
-### 🔌 Day 2: Integrasi Full-Stack & Skalabilitas Database
-* **PostgreSQL Cloud Database**: Migrasi basis data dari SQLite lokal ke PostgreSQL (kompatibel dengan Supabase/Neon) untuk mendukung konkurensi data tingkat tinggi.
-* **SQL Compatibility Layer**: Driver abstraksi dinamis yang menerjemahkan kueri SQLite ke dialek PostgreSQL secara runtime untuk menghindari proses refactoring query di router.
-* **Transactional Safety**: Pengamanan transaksi database atomik pada rute QC dan perubahan status pekerjaan menggunakan modul bawaan Node.js **`AsyncLocalStorage`** untuk mengisolasi pool client per-request.
-* **Otentikasi Stateless JWT**: Sistem login aman menggunakan JSON Web Tokens (JWT) dengan enkripsi 24 jam untuk melindungi data operasional perusahaan.
-* **Role-Based Access Control (RBAC)**: Pembatasan menu antarmuka UI dan proteksi rute API server berdasarkan hak peran pengguna aktif (Owner, PM, Foreman, QC Inspector, Admin).
-* **Unggah Foto QC Aktual**: Integrasi pustaka `multer` untuk memproses pengunggahan bukti fisik gambar inspeksi secara biner ke sistem penyimpanan berkas server statis.
-
----
-
-## 🛠️ Tech Stack & Dependencies
-
-* **Frontend SPA**: React 19, Vite 8, Tailwind CSS v4, React Router DOM 7, Lucide React, @testing-library/react, jsdom.
-* **Backend REST API**: Node.js 22.13+, Express 5, PostgreSQL (`pg` pool client), jsonwebtoken, multer, nodemon, concurrently.
-
----
-
-## 📐 Arsitektur Sistem (System Architecture)
-
-Sistem menggunakan desain client-server stateless dengan layer transaksi terisolasi dan layer kompatibilitas database terpadu:
-
-```mermaid
-graph TD
-    subgraph Client [React SPA Client]
-        UI[React UI Components] --> Router[React Router DOM 7]
-        UI --> Context[AppDataContext State]
-        Context --> Auth[JWT Storage]
-        Context --> Bridge[API Service Bridge]
-    end
-
-    subgraph Server [Express RESTful API]
-        Bridge -->|HTTP + Bearer Token| Express[Express 5 Server]
-        Express --> AuthMW[requireAuth Middleware]
-        Express --> RouterLayer[Modular Router Layer]
-        RouterLayer --> DB[PostgreSQL Abstract Layer]
-        DB --> ALS[AsyncLocalStorage Transaction Bound]
-        ALS --> PG[(Cloud PostgreSQL / Neon / Supabase)]
-    end
-    
-    subgraph Filesystem [Storage System]
-        Express -.->|Binary Streams| Multer[Multer Disk Engine]
-        Multer --> Uploads[/server/public/uploads/]
-    end
+```text
+simo-system/
+├── frontend/              # React + Vite frontend
+│   ├── public/
+│   ├── src/
+│   ├── index.html
+│   ├── vite.config.js
+│   ├── eslint.config.js
+│   ├── package.json
+│   ├── package-lock.json
+│   └── .env.example
+├── backend/               # Express + PostgreSQL backend
+│   ├── server/
+│   ├── package.json
+│   ├── package-lock.json
+│   └── .env.example
+├── docs/                  # Migration, sprint, and restructure notes
+├── README.md
+├── .gitignore
+├── package.json           # Root convenience scripts
+└── package-lock.json
 ```
 
----
+## Tech Stack
 
-## 📋 Struktur Skema Database
-Sistem relasional data terdiri dari 7 tabel utama:
-* `roles`: Manajemen peran operasional pengguna.
-* `users`: Data identitas dan relasi lokasi kerja pengguna.
-* `projects`: Informasi proyek manufaktur aktif.
-* `warehouses`: Informasi gudang produksi terikat.
-* `work_items`: Daftar pekerjaan perakitan material produksi.
-* `qc_checklists`: Rekaman hasil inspeksi dan dimensi fisik material.
-* `audit_logs`: Rekaman log audit otomatis kepatuhan operasional.
+- Frontend: React 19, Vite 8, React Router, Tailwind CSS v4, Lucide React, Vitest.
+- Backend: Node.js, Express 5, PostgreSQL via `pg`, JWT auth, RBAC, Multer uploads.
+- Database: PostgreSQL. SQLite is not used as the active database technology.
 
----
+## Install
 
-## ⚙️ Panduan Setup & Instalasi
+Install all packages from the root:
 
-### 1. Prasyarat
-* Node.js versi 22.13 atau lebih baru
-* npm versi 9 atau lebih baru
-* Akun PostgreSQL (direkomendasikan menggunakan instance cloud gratis di [Neon.tech](https://neon.tech) atau [Supabase](https://supabase.com))
-
-### 2. Pemasangan Dependencies
-Kloning repository dan jalankan instalasi paket:
 ```bash
-npm install
+npm run install:all
 ```
 
-### 3. Konfigurasi Environment
-Buat berkas `.env` pada direktori root proyek berdasarkan `.env.example`:
+Or install each app separately:
+
+```bash
+npm install --prefix frontend
+npm install --prefix backend
+```
+
+## Environment Setup
+
+Create local env files from examples. Do not commit real `.env` files. Restart the Vite dev server after changing `frontend/.env`.
+
+Frontend:
+
+```bash
+cp frontend/.env.example frontend/.env
+```
+
+Backend:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Frontend defaults:
+
 ```env
-# Koneksi PostgreSQL (Sesuaikan dengan Neon/Supabase Anda)
-DATABASE_URL="postgresql://user:password@host:port/dbname?sslmode=require"
-DATABASE_URL_TEST="postgresql://user:password@host:port/test-dbname?sslmode=require"
-
-# Konfigurasi Koneksi Frontend
+VITE_API_BASE_URL=http://localhost:3001
 VITE_USE_BACKEND_API=true
-VITE_API_BASE_URL=http://localhost:3001/api
 ```
 
-### 4. Database Seeding
-Jalankan script untuk mengonfigurasi skema awal dan mengisi demo data secara otomatis ke database cloud:
+Backend defaults to configure:
+
+```env
+PORT=3001
+DATABASE_URL=postgresql://postgres:password@127.0.0.1:5432/simo_system
+DATABASE_URL_TEST=postgresql://postgres:password@127.0.0.1:5432/simo_system_test
+JWT_SECRET=change_this_secret
+CORS_ORIGIN=http://localhost:5173
+UPLOAD_DIR=server/public/uploads
+```
+
+PostgreSQL must be running before starting the backend. If startup prints `PostgreSQL connection failed`, verify that `backend/.env` exists, `DATABASE_URL` points to an active database, and port `5432` is reachable.
+
+## PostgreSQL Setup
+
+1. Create a PostgreSQL database, for example `simo_system`.
+2. Set `DATABASE_URL` in `backend/.env`.
+3. Initialize and seed demo data:
+
 ```bash
 npm run db:seed
 ```
 
----
+The backend initializes tables from `backend/server/db/schema.sql` when the app/database helper starts.
 
-## 💻 NPM Scripts
+## Run
 
-Aplikasi menyediakan berbagai script siap pakai untuk pengembangan dan pengujian:
+From the root:
 
-| Perintah | Deskripsi |
-|---|---|
-| `npm run dev` | Menjalankan React frontend (Vite) saja. |
-| `npm run dev:server` | Menjalankan Express backend dengan nodemon & pembacaan `.env`. |
-| `npm run dev:all` | Menjalankan frontend dan backend secara bersamaan (*concurrently*). |
-| `npm run start:server` | Menjalankan backend Express tanpa file watcher. |
-| `npm run db:seed` | Membuat tabel awal dan menyuntikkan demo data idempotent ke database. |
-| `npm run test:server` | Menjalankan pengujian integrasi REST API backend (`node:test`). |
-| `npm run test:ui` | Menjalankan pengujian DOM React Component frontend (`vitest`). |
-| `npm run build` | Membuat bundle kompilasi produksi frontend ke dalam folder `dist`. |
-| `npm run lint` | Menjalankan ESLint untuk pengecekan kualitas kode. |
+```bash
+npm run dev:frontend
+npm run dev:backend
+npm run dev:full
+```
 
----
+Or from each app:
 
-## 🧪 Strategi Pengujian (Testing Strategy)
+```bash
+npm --prefix frontend run dev
+npm --prefix backend run dev
+```
 
-Proyek ini memisahkan pengujian backend dan frontend untuk mengoptimalkan keandalan arsitektur:
+Default URLs:
 
-### A. Backend Integration Testing
-* **Metode**: Menggunakan modul pengujian bawaan Node.js (`node:test`).
-* **Cakupan**: Memvalidasi integrasi route, translasi query database, kepatuhan transaksi atomik, validasi JSON, dan keandalan proteksi autentikasi token JWT.
-* **Perintah**: `npm run test:server`
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:3001/api`
+- Health check: `http://localhost:3001/api/health`
+- Uploads: `http://localhost:3001/uploads/<filename>`
 
-### B. Frontend DOM Testing
-* **Metode**: Menggunakan **Vitest** dan **React Testing Library** dalam lingkungan browser virtual **jsdom**.
-* **Cakupan**: Memverifikasi render antarmuka login, interaksi klik cepat demo akun (1-Click Fill), dan orkestrasi penyerahan (*submit*) formulir biner.
-* **Perintah**: `npm run test:ui`
+## Build, Lint, and Test
 
----
+```bash
+npm run lint:frontend
+npm run build:frontend
+npm run test:frontend
+npm run test:backend
+```
 
-## 🔐 Akun Demo Operasional
+Backend tests require a reachable PostgreSQL database from `DATABASE_URL_TEST` or `DATABASE_URL`.
 
-Untuk login di antarmuka sistem (JWT Auth), gunakan akun di bawah dengan password default: **`password`**
+## Demo Login Accounts
 
-| Nama Pengguna | Email Login | Hak Peran (Role) | Hak Akses Utama |
-|---|---|---|---|
-| **Rina Wijaya** | `rina.wijaya@simo.test` | Owner | Dashboard, Logistik, & Audit Trail. |
-| **Budi Santoso** | `budi.santoso@simo.test` | Production Manager | Manajemen produksi, Update Work Item, & Audit Trail. |
-| **Joko Anwar** | `joko.anwar@simo.test` | Foreman | Papan Produksi & Update status pekerjaan. |
-| **Siti Nurhaliza** | `siti.nurhaliza@simo.test` | QC Inspector | Formulir Digital QC & QC Checklist History. |
-| **Dewi Lestari** | `dewi.lestari@simo.test` | Admin | Akses operasional penuh sistem. |
+All seeded users use password `password`.
+
+- Owner: `rina.wijaya@simo.test`
+- Production Manager: `budi.santoso@simo.test`
+- Foreman: `joko.anwar@simo.test`
+- QC Inspector: `siti.nurhaliza@simo.test`
+- Admin: `dewi.lestari@simo.test`
+
+## Modules
+
+- Dashboard monitoring.
+- Warehouse production work item updates.
+- Digital QC checklist with evidence upload.
+- Audit log tracking for production, QC, and logistics actions.
+- Logistics manifest foundation with manual delivery check-ins.
+- JWT authentication and role-based access control.
+
+## Known Limitations
+
+- Logistics check-ins are manual text entries; no live GPS yet.
+- No geofencing or live map integration yet.
+- Backend tests need a configured PostgreSQL instance.
+- Vehicle and driver master data are still stored directly on logistics manifests.
+
+## GitHub Push Notes
+
+Before pushing to GitHub, keep only safe project files in version control.
+
+- Commit `.env.example` files, not real `.env` files.
+- Keep `backend/.env` and `frontend/.env` local only.
+- Do not commit database passwords, JWT secrets, access tokens, or private connection strings.
+- Use hosting environment variables for production credentials.
+- Check ignored env files before pushing:
+
+```bash
+git check-ignore -v backend/.env frontend/.env
+```
+
+- Review pending files before commit:
+
+```bash
+git status --short
+```
+
+Recommended files to keep as examples:
+
+- `backend/.env.example`
+- `frontend/.env.example`
+
+Recommended files to keep local only:
+
+- `backend/.env`
+- `frontend/.env`
+- Local reports, notes, and generated documentation that are not needed to run the app.
+
+## Documentation
+
+See `docs/` for migration notes, progress reports, logistics sprint notes, and directory restructure details.
+
+

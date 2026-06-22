@@ -1,0 +1,24 @@
+{
+  "name": "simo-mugi-jaya-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --watch server --ext js,sql --exec \"node --env-file-if-exists=.env server/index.js\"",
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "test": "node --env-file-if-exists=.env --test server/tests/api.test.js",
+    "test:server": "node --env-file-if-exists=.env --test server/tests/api.test.js",
+    "db:seed": "node --env-file-if-exists=.env server/seed/seedDatabase.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.2.0",
+    "pg": "^8.21.0",
+    "simo-mugi-jaya": "file:.."
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
