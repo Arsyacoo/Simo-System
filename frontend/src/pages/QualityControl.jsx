@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ClipboardCheck, PackageCheck, Ruler, ShieldCheck, Upload } from 'lucide-react';
+import { ClipboardCheck, FileImage, PackageCheck, Ruler, ShieldCheck, Upload } from 'lucide-react';
 import { useAppData } from '../context/AppDataCore';
 import { QC_STATUS_OPTIONS } from '../data/seedData';
+import { AlertMessage, EmptyState, MetricCard, PageHeader, SectionHeading, StatusBadge, Surface } from '../components/ui';
 
 const qcStyles = {
   Pending: 'border-amber-200 bg-amber-50 text-amber-700',
@@ -30,22 +31,8 @@ function buildFormFromItem(item) {
   };
 }
 
-const FieldLabel = ({ children }) => (
-  <label className="text-xs font-bold uppercase tracking-wide text-slate-500">{children}</label>
-);
-
-const MetricCard = ({ icon: Icon, label, value, tone }) => (
-  <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-    <div className="flex items-center gap-3">
-      <div className={`rounded-lg p-2.5 ${tone}`}>
-        <Icon size={20} />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-slate-500">{label}</p>
-        <p className="text-2xl font-bold text-slate-800">{value}</p>
-      </div>
-    </div>
-  </div>
+const FieldLabel = ({ children, htmlFor }) => (
+  <label htmlFor={htmlFor} className="text-xs font-bold uppercase tracking-wide text-slate-500">{children}</label>
 );
 
 export default function QualityControl() {
@@ -59,6 +46,9 @@ export default function QualityControl() {
 
   const [form, setForm] = useState(() => buildFormFromItem(data.workItems[0]));
   const [file, setFile] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   const filteredWorkItems = useMemo(
     () => data.workItems.filter((item) => item.projectId === form.projectId),
@@ -96,67 +86,91 @@ export default function QualityControl() {
     setForm((currentForm) => ({ ...currentForm, [field]: value }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!permissions.canSubmitQc) {
       return;
     }
 
-    submitQcChecklist({ ...form, file });
-    setFile(null);
-    setForm((currentForm) => ({
-      ...currentForm,
-      length: '',
-      width: '',
-      thickness: '',
-      qcStatus: 'Pending',
-      notes: '',
-      evidencePhoto: '',
-    }));
+    setIsSubmitting(true);
+    setMessage('');
+    setError('');
+
+    try {
+      await submitQcChecklist({ ...form, file });
+      setMessage(`${form.materialName} submitted as ${form.qcStatus}.`);
+      setFile(null);
+      setForm((currentForm) => ({
+        ...currentForm,
+        length: '',
+        width: '',
+        thickness: '',
+        qcStatus: 'Pending',
+        notes: '',
+        evidencePhoto: '',
+      }));
+    } catch (err) {
+      setError(err?.message || 'QC checklist belum dapat disimpan. Silakan coba lagi.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Digital QC Checklist</h1>
-          <p className="text-slate-500">Material inspection records before shipping release</p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Quality control"
+        title="Digital QC Checklist"
+        description="Catat hasil inspeksi material, unggah evidence, dan tentukan apakah material siap masuk proses pengiriman."
+        meta={
+          <StatusBadge tone={permissions.canSubmitQc ? 'emerald' : 'slate'}>
+            {permissions.canSubmitQc ? 'QC submission enabled' : 'Read-only access'}
+          </StatusBadge>
+        }
+      />
+
+      {message && <AlertMessage type="success" title="Checklist submitted">{message}</AlertMessage>}
+      {error && <AlertMessage type="error" title="Submission failed">{error}</AlertMessage>}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <MetricCard
           icon={ClipboardCheck}
           label="QC Records"
           value={data.qcChecklists.length}
-          tone="bg-blue-50 text-blue-600"
+          caption="Inspection history"
+          tone="blue"
         />
         <MetricCard
           icon={ShieldCheck}
           label="Passed QC"
           value={passedCount}
-          tone="bg-emerald-50 text-emerald-600"
+          caption="Approved records"
+          tone="emerald"
         />
         <MetricCard
           icon={PackageCheck}
           label="Ready To Ship"
           value={readyItems.length}
-          tone="bg-indigo-50 text-indigo-600"
+          caption="Released materials"
+          tone="indigo"
         />
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <form onSubmit={handleSubmit} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center gap-2 border-b border-slate-100 pb-4">
-            <ClipboardCheck size={20} className="text-slate-500" />
-            <h2 className="text-lg font-bold text-slate-800">Checklist Form</h2>
-          </div>
+        <Surface>
+          <form onSubmit={handleSubmit}>
+            <SectionHeading
+              icon={ClipboardCheck}
+              title="Checklist Form"
+              description="Pilih work item, isi dimensi, status inspeksi, catatan, dan evidence bila tersedia."
+            />
 
-          <fieldset disabled={!permissions.canSubmitQc} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <fieldset disabled={!permissions.canSubmitQc || isSubmitting} className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
-              <FieldLabel>Project</FieldLabel>
+              <FieldLabel htmlFor="qc-project">Project</FieldLabel>
               <select
+                id="qc-project"
                 value={form.projectId}
                 onChange={(event) => handleProjectChange(event.target.value)}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
@@ -170,8 +184,9 @@ export default function QualityControl() {
             </div>
 
             <div className="space-y-1.5">
-              <FieldLabel>Work Item</FieldLabel>
+              <FieldLabel htmlFor="qc-work-item">Work Item</FieldLabel>
               <select
+                id="qc-work-item"
                 value={form.workItemId}
                 onChange={(event) => handleWorkItemChange(event.target.value)}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
@@ -185,8 +200,9 @@ export default function QualityControl() {
             </div>
 
             <div className="space-y-1.5">
-              <FieldLabel>Warehouse</FieldLabel>
+              <FieldLabel htmlFor="qc-warehouse">Warehouse</FieldLabel>
               <input
+                id="qc-warehouse"
                 value={warehousesById.get(form.warehouseId)?.name || ''}
                 readOnly
                 className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600"
@@ -194,8 +210,9 @@ export default function QualityControl() {
             </div>
 
             <div className="space-y-1.5">
-              <FieldLabel>Material Name</FieldLabel>
+              <FieldLabel htmlFor="qc-material">Material Name</FieldLabel>
               <input
+                id="qc-material"
                 value={form.materialName}
                 onChange={(event) => handleChange('materialName', event.target.value)}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
@@ -204,10 +221,11 @@ export default function QualityControl() {
             </div>
 
             <div className="space-y-1.5">
-              <FieldLabel>Length</FieldLabel>
+              <FieldLabel htmlFor="qc-length">Length</FieldLabel>
               <div className="relative">
                 <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input
+                  id="qc-length"
                   type="number"
                   min="0"
                   step="0.1"
@@ -220,10 +238,11 @@ export default function QualityControl() {
             </div>
 
             <div className="space-y-1.5">
-              <FieldLabel>Width</FieldLabel>
+              <FieldLabel htmlFor="qc-width">Width</FieldLabel>
               <div className="relative">
                 <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input
+                  id="qc-width"
                   type="number"
                   min="0"
                   step="0.1"
@@ -236,10 +255,11 @@ export default function QualityControl() {
             </div>
 
             <div className="space-y-1.5">
-              <FieldLabel>Thickness</FieldLabel>
+              <FieldLabel htmlFor="qc-thickness">Thickness</FieldLabel>
               <div className="relative">
                 <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input
+                  id="qc-thickness"
                   type="number"
                   min="0"
                   step="0.1"
@@ -252,8 +272,9 @@ export default function QualityControl() {
             </div>
 
             <div className="space-y-1.5">
-              <FieldLabel>QC Status</FieldLabel>
+              <FieldLabel htmlFor="qc-status">QC Status</FieldLabel>
               <select
+                id="qc-status"
                 value={form.qcStatus}
                 onChange={(event) => handleChange('qcStatus', event.target.value)}
                 className={`w-full rounded-lg border px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-70 ${qcStyles[form.qcStatus]}`}
@@ -267,21 +288,26 @@ export default function QualityControl() {
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
-              <FieldLabel>Evidence Photo</FieldLabel>
-              <div className="relative">
+              <FieldLabel htmlFor="qc-evidence">Evidence Photo</FieldLabel>
+              <div className="relative rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3">
                 <Upload className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input
+                  id="qc-evidence"
                   type="file"
                   accept="image/*"
                   onChange={(event) => setFile(event.target.files[0] || null)}
                   className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
                 />
+                <p className="mt-2 text-xs font-medium text-slate-500">
+                  Accepted file: image up to 5 MB. {file ? `Selected: ${file.name}` : 'No file selected.'}
+                </p>
               </div>
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
-              <FieldLabel>Notes</FieldLabel>
+              <FieldLabel htmlFor="qc-notes">Notes</FieldLabel>
               <textarea
+                id="qc-notes"
                 value={form.notes}
                 onChange={(event) => handleChange('notes', event.target.value)}
                 rows={4}
@@ -289,30 +315,30 @@ export default function QualityControl() {
                 required
               />
             </div>
-          </fieldset>
+            </fieldset>
 
-          <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium text-slate-500">{statusHelp[form.qcStatus]}</p>
             <button
               type="submit"
-              disabled={!permissions.canSubmitQc}
+              disabled={!permissions.canSubmitQc || isSubmitting}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               <ClipboardCheck size={18} />
-              Submit Checklist
+              {isSubmitting ? 'Submitting...' : 'Submit Checklist'}
             </button>
-          </div>
-        </form>
+            </div>
+          </form>
+        </Surface>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-800">Inspection Status</h2>
-            <p className="text-sm text-slate-500">
-              {selectedWorkItem?.materialName} | {projectsById.get(form.projectId)?.code}
-            </p>
-          </div>
+        <Surface>
+          <SectionHeading
+            icon={ShieldCheck}
+            title="Inspection Status"
+            description={`${selectedWorkItem?.materialName || 'No material selected'} | ${projectsById.get(form.projectId)?.code || '-'}`}
+          />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="mt-5 grid grid-cols-2 gap-3">
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
               <p className="text-sm font-semibold text-emerald-700">Passed QC</p>
               <p className="text-3xl font-bold text-emerald-800">{passedCount}</p>
@@ -326,7 +352,7 @@ export default function QualityControl() {
           <div className="mt-5">
             <h3 className="mb-3 font-bold text-slate-800">Ready Materials</h3>
             <div className="space-y-3">
-              {readyItems.map((item) => (
+              {readyItems.length > 0 ? readyItems.map((item) => (
                 <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-1 flex items-start justify-between gap-3">
                     <p className="font-semibold text-slate-800">{item.materialName}</p>
@@ -338,20 +364,40 @@ export default function QualityControl() {
                     {projectsById.get(item.projectId)?.code} | {warehousesById.get(item.warehouseId)?.code}
                   </p>
                 </div>
-              ))}
+              )) : (
+                <EmptyState
+                  icon={PackageCheck}
+                  title="No ready materials yet."
+                  description="Materials will appear here after Passed QC."
+                />
+              )}
             </div>
           </div>
-        </section>
+        </Surface>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 p-5">
-          <h2 className="text-lg font-bold text-slate-800">QC Checklist History</h2>
+      <Surface padding="p-0">
+        <div className="p-5">
+          <SectionHeading
+            icon={FileImage}
+            title="QC Checklist History"
+            description="Riwayat inspeksi terbaru dengan status, evidence, inspector, dan catatan."
+          />
         </div>
-        <div className="overflow-x-auto">
+
+        {data.qcChecklists.length === 0 ? (
+          <div className="px-5 pb-5">
+            <EmptyState
+              icon={ClipboardCheck}
+              title="No QC records yet."
+              description="Submitted checklists will appear here."
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] border-collapse text-left">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
+              <tr className="border-y border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                 <th className="px-5 py-4">Time</th>
                 <th className="px-5 py-4">Material</th>
                 <th className="px-5 py-4">Dimension</th>
@@ -403,8 +449,9 @@ export default function QualityControl() {
               ))}
             </tbody>
           </table>
-        </div>
-      </section>
+          </div>
+        )}
+      </Surface>
     </div>
   );
 }

@@ -170,7 +170,7 @@ export async function openDatabase(databasePath = process.env.DATABASE_URL) {
 export async function initializeDatabase(db, dropTables = false) {
   const schema = await fs.readFile(SCHEMA_PATH, 'utf8');
   if (dropTables) {
-    const tables = ['audit_logs', 'delivery_checkins', 'logistics_manifests', 'qc_checklists', 'work_items', 'warehouses', 'projects', 'users', 'roles'];
+    const tables = ['audit_logs', 'logistics_locations', 'delivery_checkins', 'logistics_manifests', 'qc_checklists', 'work_items', 'warehouses', 'projects', 'users', 'roles'];
     for (const table of tables) {
       await exec(db, `DROP TABLE IF EXISTS ${table} CASCADE`);
     }

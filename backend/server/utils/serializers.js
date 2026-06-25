@@ -104,6 +104,30 @@ export function serializeDeliveryCheckin(row) {
   };
 }
 
+function nullableNumber(value) {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+export function serializeLogisticsLocation(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    manifestId: row.manifest_id,
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    accuracy: nullableNumber(row.accuracy),
+    speed: nullableNumber(row.speed),
+    heading: nullableNumber(row.heading),
+    recordedBy: row.recorded_by,
+    recordedByName: row.recorded_by_name,
+    source: row.source,
+    createdAt: row.created_at,
+  };
+}
+
 export function serializeLogisticsManifest(row) {
   return {
     id: row.id,

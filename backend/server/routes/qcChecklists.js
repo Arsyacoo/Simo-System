@@ -17,6 +17,7 @@ import {
 import { serializeQcChecklist } from '../utils/serializers.js';
 
 const QC_STATUS_OPTIONS = ['Pending', 'Passed QC', 'Rework'];
+const QC_SUBMISSION_ROLES = ['QC Inspector', 'Admin'];
 
 const uploadDir = path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'server/public/uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -41,10 +42,48 @@ const upload = multer({
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Hanya file gambar yang diperbolehkan!'));
+      cb(new HttpError(400, 'INVALID_EVIDENCE_FILE', 'Hanya file gambar yang diperbolehkan.'));
     }
   },
 });
+
+function requireQcSubmissionRole(req, res, next) {
+  void res;
+
+  if (!QC_SUBMISSION_ROLES.includes(req.user?.roleName)) {
+    throw new HttpError(
+      403,
+      'FORBIDDEN',
+      'Akses submit QC hanya tersedia untuk QC Inspector dan Admin.',
+    );
+  }
+
+  next();
+}
+
+function handleEvidenceUpload(req, res, next) {
+  upload.single('evidencePhoto')(req, res, (error) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof HttpError) {
+      next(error);
+      return;
+    }
+
+    if (error instanceof multer.MulterError) {
+      const message = error.code === 'LIMIT_FILE_SIZE'
+        ? 'Evidence photo must be 5 MB or smaller.'
+        : 'Evidence photo could not be uploaded.';
+      next(new HttpError(400, 'INVALID_EVIDENCE_FILE', message));
+      return;
+    }
+
+    next(new HttpError(400, 'INVALID_EVIDENCE_FILE', error.message || 'Invalid evidence file.'));
+  });
+}
 
 export function createQcChecklistsRouter(db) {
   const router = Router();
@@ -62,7 +101,7 @@ export function createQcChecklistsRouter(db) {
     sendData(res, serializeQcChecklist(row));
   }));
 
-  router.post('/', requireAuth, upload.single('evidencePhoto'), asyncHandler(async (req, res) => {
+  router.post('/', requireAuth, requireQcSubmissionRole, handleEvidenceUpload, asyncHandler(async (req, res) => {
     const payload = req.body || {};
     const workItemId = requireNonEmptyString(payload.workItemId, 'workItemId');
     const materialName = requireNonEmptyString(payload.materialName, 'materialName');

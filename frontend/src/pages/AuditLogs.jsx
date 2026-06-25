@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Activity, Calendar, Download, Users } from 'lucide-react';
+import { Activity, Download, FileText, ListFilter, Users } from 'lucide-react';
 import { useAppData } from '../context/AppDataCore';
+import { AlertMessage, EmptyState, PageHeader, SectionHeading, StatusBadge, Surface } from '../components/ui';
 
 const actionStyles = {
   UPDATE: 'bg-amber-100 text-amber-700 border-amber-200',
@@ -9,7 +10,7 @@ const actionStyles = {
 };
 
 const Badge = ({ type }) => (
-  <span className={`rounded-sm border px-2 py-0.5 text-[10px] font-bold ${actionStyles[type] || actionStyles.UPDATE}`}>
+  <span className={`rounded-md border px-2.5 py-1 text-[10px] font-bold ${actionStyles[type] || actionStyles.UPDATE}`}>
     {type}
   </span>
 );
@@ -55,20 +56,24 @@ function escapeCsv(value) {
 
 export default function AuditLogs() {
   const { data } = useAppData();
+  const [moduleFilter, setModuleFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
   const [actionFilter, setActionFilter] = useState('all');
+  const [exportMessage, setExportMessage] = useState('');
 
   const roles = useMemo(() => [...new Set(data.auditLogs.map((log) => log.role))], [data.auditLogs]);
   const actions = useMemo(() => [...new Set(data.auditLogs.map((log) => log.action))], [data.auditLogs]);
+  const modules = useMemo(() => [...new Set(data.auditLogs.map(getAuditArea))], [data.auditLogs]);
 
   const logs = useMemo(
     () =>
       data.auditLogs.filter(
         (log) =>
+          (moduleFilter === 'all' || getAuditArea(log) === moduleFilter) &&
           (roleFilter === 'all' || log.role === roleFilter) &&
           (actionFilter === 'all' || log.action === actionFilter),
       ),
-    [actionFilter, data.auditLogs, roleFilter],
+    [actionFilter, data.auditLogs, moduleFilter, roleFilter],
   );
 
   const handleExport = () => {
@@ -103,29 +108,43 @@ export default function AuditLogs() {
     link.download = 'simo-audit-logs.csv';
     link.click();
     URL.revokeObjectURL(url);
+    setExportMessage(`Exported ${logs.length} audit records to CSV.`);
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Audit Trail & Activity Log</h1>
-          <p className="text-slate-500">Production and QC activity records</p>
-        </div>
+      <PageHeader
+        eyebrow="Audit evidence"
+        title="Audit Trail & Activity Log"
+        description="Review production, QC, and logistics actions with actor, role, before/after values, and detail notes."
+        meta={
+          <>
+            <StatusBadge tone="blue">{data.auditLogs.length} total logs</StatusBadge>
+            <StatusBadge tone={logs.length ? 'emerald' : 'amber'}>{logs.length} visible</StatusBadge>
+          </>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={handleExport}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          >
+            <Download size={18} />
+            Export CSV
+          </button>
+        }
+      />
 
-        <button
-          type="button"
-          onClick={handleExport}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
-        >
-          <Download size={18} />
-          Export CSV
-        </button>
-      </div>
+      {exportMessage && <AlertMessage type="success" title="CSV export ready">{exportMessage}</AlertMessage>}
 
       <div className="flex flex-wrap gap-4">
-        <FilterSelect label="Date Range" icon={Calendar} value="today" onChange={() => undefined}>
-          <option value="today">Today</option>
+        <FilterSelect label="Module" icon={ListFilter} value={moduleFilter} onChange={setModuleFilter}>
+          <option value="all">All modules</option>
+          {modules.map((moduleName) => (
+            <option key={moduleName} value={moduleName}>
+              {moduleName}
+            </option>
+          ))}
         </FilterSelect>
         <FilterSelect label="User Role" icon={Users} value={roleFilter} onChange={setRoleFilter}>
           <option value="all">All roles</option>
@@ -145,11 +164,19 @@ export default function AuditLogs() {
         </FilterSelect>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <Surface padding="p-0" className="overflow-hidden">
+        <div className="p-5">
+          <SectionHeading
+            icon={FileText}
+            title="Audit Records"
+            description="Use the filters to support the final demo story across modules and roles."
+          />
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] border-collapse text-left">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
+              <tr className="border-y border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                 <th className="px-5 py-4">Timestamp</th>
                 <th className="px-5 py-4">User</th>
                 <th className="px-5 py-4">Role</th>
@@ -177,8 +204,12 @@ export default function AuditLogs() {
               ))}
               {logs.length === 0 && (
                 <tr>
-                  <td colSpan="8" className="px-5 py-8 text-center text-sm font-semibold text-slate-500">
-                    No audit logs match the selected filters.
+                  <td colSpan="8" className="px-5 py-6">
+                    <EmptyState
+                      icon={FileText}
+                      title="No audit logs match the selected filters."
+                      description="Audit records appear after production, QC, or logistics actions are performed."
+                    />
                   </td>
                 </tr>
               )}
@@ -191,7 +222,7 @@ export default function AuditLogs() {
             Showing {logs.length} of {data.auditLogs.length} entries
           </span>
         </div>
-      </div>
+      </Surface>
     </div>
   );
 }

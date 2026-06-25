@@ -1,5 +1,6 @@
-import { Activity, Building2, CheckCircle2, ClipboardList, PackageCheck } from 'lucide-react';
+import { Activity, Building2, CheckCircle2, ClipboardList, PackageCheck, ShieldCheck } from 'lucide-react';
 import { useAppData } from '../context/AppDataCore';
+import { EmptyState, MetricCard, PageHeader, SectionHeading, StatusBadge, Surface } from '../components/ui';
 
 const toneByPercentage = (percentage) => {
   if (percentage >= 80) {
@@ -24,19 +25,6 @@ const toneByPercentage = (percentage) => {
     dot: 'bg-amber-500',
   };
 };
-
-const StatCard = ({ title, value, status, icon: Icon, iconColor, iconBgColor }) => (
-  <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-    <div className="mb-4 flex items-start justify-between">
-      <div className={`rounded-lg p-3 ${iconBgColor}`}>
-        <Icon className={iconColor} size={24} />
-      </div>
-    </div>
-    <p className="text-sm font-medium text-slate-500">{title}</p>
-    <h3 className="mt-1 text-3xl font-bold text-slate-800">{value}</h3>
-    <p className="mt-2 text-sm font-medium text-slate-500">{status}</p>
-  </div>
-);
 
 const ProgressBar = ({ percentage }) => {
   const tone = toneByPercentage(percentage);
@@ -74,65 +62,74 @@ const ProgressRow = ({ title, subtitle, total, completed, percentage, rightLabel
 };
 
 export default function Dashboard() {
-  const { data, metrics } = useAppData();
+  const { data, isLoading, isOffline, metrics } = useAppData();
   const qcQueue = data.workItems.filter((item) => item.status === 'Done' && !item.readyToShip);
+  const todayLabel = new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date());
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Production Dashboard</h1>
-          <p className="text-slate-500">SIMO Mugi Jaya operational snapshot</p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Production monitoring"
+        title="Production Dashboard"
+        description="Snapshot operasional SIMO Mugi Jaya untuk progres produksi, kesiapan pengiriman, dan antrean QC."
+        meta={
+          <>
+            <StatusBadge tone="blue">{todayLabel}</StatusBadge>
+            <StatusBadge tone={isOffline ? 'amber' : 'emerald'}>
+              {isOffline ? 'Offline fallback' : 'Backend connected'}
+            </StatusBadge>
+            {isLoading && <StatusBadge tone="amber">Loading data...</StatusBadge>}
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Active Projects"
+        <MetricCard
+          label="Active Projects"
           value={metrics.totalProjects}
-          status={`${metrics.totalWarehouses} warehouses assigned`}
+          caption={`${metrics.totalWarehouses} warehouses assigned`}
           icon={Activity}
-          iconColor="text-blue-600"
-          iconBgColor="bg-blue-50"
+          tone="blue"
         />
-        <StatCard
-          title="Total Work Items"
+        <MetricCard
+          label="Total Work Items"
           value={metrics.totalWorkItems}
-          status={`${metrics.completedWorkItems} completed`}
+          caption={`${metrics.completedWorkItems} completed`}
           icon={ClipboardList}
-          iconColor="text-indigo-600"
-          iconBgColor="bg-indigo-50"
+          tone="indigo"
         />
-        <StatCard
-          title="Production Progress"
+        <MetricCard
+          label="Production Progress"
           value={`${metrics.progressPercentage}%`}
-          status="Based on completed work items"
+          caption="Based on completed work items"
           icon={CheckCircle2}
-          iconColor="text-emerald-600"
-          iconBgColor="bg-emerald-50"
+          tone="emerald"
         />
-        <StatCard
-          title="Ready To Ship"
+        <MetricCard
+          label="Ready To Ship"
           value={metrics.readyToShipItems}
-          status={`${metrics.pendingQcItems} completed items blocked by QC`}
+          caption={`${metrics.pendingQcItems} completed items blocked by QC`}
           icon={PackageCheck}
-          iconColor="text-rose-600"
-          iconBgColor="bg-rose-50"
+          tone="rose"
         />
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2">
-              <Activity size={20} className="text-slate-500" />
-              <h2 className="text-lg font-bold text-slate-800">Project Progress</h2>
-            </div>
-            <span className="text-sm font-semibold text-slate-500">{metrics.totalProjects} projects</span>
-          </div>
+        <Surface>
+          <SectionHeading
+            icon={Activity}
+            title="Project Progress"
+            description="Progress produksi per proyek untuk narasi demo."
+            action={<span className="text-sm font-semibold text-slate-500">{metrics.totalProjects} projects</span>}
+          />
 
-          <div>
-            {metrics.projectProgress.map((project) => (
+          <div className="mt-2">
+            {metrics.projectProgress.length > 0 ? metrics.projectProgress.map((project) => (
               <ProgressRow
                 key={project.id}
                 title={`${project.code} - ${project.name}`}
@@ -142,21 +139,22 @@ export default function Dashboard() {
                 percentage={project.progressPercentage}
                 rightLabel={project.priority}
               />
-            ))}
+            )) : (
+              <EmptyState title="No project data found yet." description="Project progress will appear after project and work item data is available." />
+            )}
           </div>
-        </section>
+        </Surface>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <div className="flex items-center gap-2">
-              <Building2 size={20} className="text-slate-500" />
-              <h2 className="text-lg font-bold text-slate-800">Warehouse Progress</h2>
-            </div>
-            <span className="text-sm font-semibold text-slate-500">{metrics.totalWarehouses} warehouses</span>
-          </div>
+        <Surface>
+          <SectionHeading
+            icon={Building2}
+            title="Warehouse Progress"
+            description="Ringkasan penyelesaian pekerjaan per area warehouse."
+            action={<span className="text-sm font-semibold text-slate-500">{metrics.totalWarehouses} warehouses</span>}
+          />
 
-          <div>
-            {metrics.warehouseProgress.map((warehouse) => (
+          <div className="mt-2">
+            {metrics.warehouseProgress.length > 0 ? metrics.warehouseProgress.map((warehouse) => (
               <ProgressRow
                 key={warehouse.id}
                 title={`${warehouse.code} - ${warehouse.name}`}
@@ -166,24 +164,23 @@ export default function Dashboard() {
                 percentage={warehouse.progressPercentage}
                 rightLabel={warehouse.projectCodes.join(', ') || 'No project'}
               />
-            ))}
+            )) : (
+              <EmptyState title="No warehouse data found yet." description="Warehouse progress will appear after production data is available." />
+            )}
           </div>
-        </section>
+        </Surface>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">QC Shipping Gate</h2>
-            <p className="text-sm text-slate-500">Completed materials require Passed QC before shipping.</p>
-          </div>
-          <span className="rounded border border-rose-200 bg-rose-50 px-3 py-1 text-sm font-bold text-rose-700">
-            {qcQueue.length} blocked
-          </span>
-        </div>
+      <Surface>
+        <SectionHeading
+          icon={ShieldCheck}
+          title="QC Shipping Gate"
+          description="Completed materials require Passed QC before shipping."
+          action={<StatusBadge tone={qcQueue.length ? 'rose' : 'emerald'}>{qcQueue.length} blocked</StatusBadge>}
+        />
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {qcQueue.map((item) => {
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {qcQueue.length > 0 ? qcQueue.map((item) => {
             const project = data.projects.find((entry) => entry.id === item.projectId);
             const warehouse = data.warehouses.find((entry) => entry.id === item.warehouseId);
 
@@ -198,9 +195,17 @@ export default function Dashboard() {
                 <p className="text-sm text-slate-500">{project?.code} | {warehouse?.code}</p>
               </div>
             );
-          })}
+          }) : (
+            <div className="md:col-span-2 xl:col-span-3">
+              <EmptyState
+                icon={PackageCheck}
+                title="All completed materials are clear."
+                description="Items blocked by QC will appear here during the demo."
+              />
+            </div>
+          )}
         </div>
-      </section>
+      </Surface>
     </div>
   );
 }

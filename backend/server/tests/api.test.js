@@ -10,10 +10,13 @@ let baseUrl;
 let currentToken = null;
 
 async function request(path, options = {}) {
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
+  const isFormData = options.body instanceof FormData;
+  const headers = { ...options.headers };
+
+  if (!isFormData && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   if (currentToken && !headers.Authorization) {
     headers.Authorization = `Bearer ${currentToken}`;
   }
@@ -147,6 +150,48 @@ test('unauthorized or invalid token requests return 401 errors', async () => {
   assert.equal(invalidToken.body.error.code, 'INVALID_TOKEN');
 });
 
+test('role-specific mutation endpoints reject unauthorized roles', async () => {
+  const ownerLogin = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'rina.wijaya@simo.test', password: 'password' }),
+  });
+  currentToken = ownerLogin.body.data.token;
+
+  const ownerProductionUpdate = await request('/api/work-items/wi-001/status', {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'Done' }),
+  });
+  assert.equal(ownerProductionUpdate.response.status, 403);
+  assert.equal(ownerProductionUpdate.body.error.code, 'FORBIDDEN');
+
+  const ownerQcSubmit = await request('/api/qc-checklists', {
+    method: 'POST',
+    body: JSON.stringify({
+      workItemId: 'wi-003',
+      materialName: 'Window Lockset A',
+      length: 120,
+      width: 40,
+      thickness: 2,
+      qcStatus: 'Passed QC',
+      notes: 'Owner should not submit QC.',
+    }),
+  });
+  assert.equal(ownerQcSubmit.response.status, 403);
+  assert.equal(ownerQcSubmit.body.error.code, 'FORBIDDEN');
+
+  const foremanLogin = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'joko.anwar@simo.test', password: 'password' }),
+  });
+  currentToken = foremanLogin.body.data.token;
+
+  const foremanLogistics = await request('/api/logistics/manifests');
+  assert.equal(foremanLogistics.response.status, 403);
+  assert.equal(foremanLogistics.body.error.code, 'FORBIDDEN');
+
+  currentToken = null;
+});
+
 test('QC submission updates shipping gate and creates an audit log', async () => {
   // Login as QC inspector
   const loginRes = await request('/api/auth/login', {
@@ -182,6 +227,147 @@ test('QC submission updates shipping gate and creates an audit log', async () =>
   assert.equal(afterCount.count, beforeCount.count + 1);
 
   currentToken = null; // reset
+});
+
+test('invalid QC evidence upload returns a client error', async () => {
+  const loginRes = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'siti.nurhaliza@simo.test', password: 'password' }),
+  });
+  currentToken = loginRes.body.data.token;
+
+  const form = new FormData();
+  form.append('workItemId', 'wi-003');
+  form.append('materialName', 'Window Lockset A');
+  form.append('length', '120');
+  form.append('width', '40');
+  form.append('thickness', '2');
+  form.append('qcStatus', 'Rework');
+  form.append('notes', 'Invalid evidence type should be rejected.');
+  form.append('evidencePhoto', new Blob(['not an image'], { type: 'text/plain' }), 'evidence.txt');
+
+  const invalidEvidence = await request('/api/qc-checklists', {
+    method: 'POST',
+    body: form,
+  });
+
+  assert.equal(invalidEvidence.response.status, 400);
+  assert.equal(invalidEvidence.body.error.code, 'INVALID_EVIDENCE_FILE');
+
+  currentToken = null;
+});
+
+test('logistics status update supports Arrived without server errors', async () => {
+  const loginRes = await request('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email: 'dewi.lestari@simo.test', password: 'password' }),
+  });
+  currentToken = loginRes.body.data.token;
+
+  const updated = await request('/api/logistics/manifests/lm-demo-002/status', {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'Arrived' }),
+  });
+
+  assert.equal(updated.response.status, 200);
+  assert.equal(updated.body.data.deliveryStatus, 'Arrived');
+  assert.equal(updated.body.meta.auditCreated, true);
+  assert.ok(updated.body.data.arrivalTime);
+
+  currentToken = null;
+});
+
+test('logistics GPS endpoints store and return latest demo location', async () => {
+  const emptyLatest = await request('/api/logistics/manifests/lm-demo-002/locations/latest');
+  assert.equal(emptyLatest.response.status, 200);
+  assert.equal(emptyLatest.body.success, true);
+  assert.equal(emptyLatest.body.data, null);
+  assert.equal(emptyLatest.body.message, 'No GPS location has been received for this manifest yet.');
+
+  const emptyHistory = await request('/api/logistics/manifests/lm-demo-002/locations/history?limit=50');
+  assert.equal(emptyHistory.response.status, 200);
+  assert.equal(emptyHistory.body.success, true);
+  assert.deepEqual(emptyHistory.body.data, []);
+  assert.equal(emptyHistory.body.message, 'No GPS location has been received for this manifest yet.');
+
+  const created = await request('/api/logistics/manifests/lm-demo-001/locations', {
+    method: 'POST',
+    body: JSON.stringify({
+      latitude: -6.2,
+      longitude: 106.816666,
+      accuracy: 15,
+      speed: null,
+      heading: null,
+      source: 'driver_geolocation',
+    }),
+  });
+
+  assert.equal(created.response.status, 201);
+  assert.equal(created.body.success, true);
+  assert.equal(created.body.message, 'Location recorded successfully');
+  assert.equal(created.body.data.manifestId, 'lm-demo-001');
+  assert.ok(Math.abs(created.body.data.latitude - (-6.2)) < 0.000001);
+  assert.ok(Math.abs(created.body.data.longitude - 106.816666) < 0.000001);
+  assert.equal(created.body.data.accuracy, 15);
+  assert.equal(created.body.data.recordedBy, null);
+  assert.equal(created.body.data.source, 'driver_geolocation');
+
+  const stored = await get(db, 'SELECT COUNT(*) AS count FROM logistics_locations WHERE manifest_id = ?', ['lm-demo-001']);
+  assert.equal(stored.count, 1);
+
+  const latest = await request('/api/logistics/manifests/lm-demo-001/locations/latest');
+  assert.equal(latest.response.status, 200);
+  assert.equal(latest.body.success, true);
+  assert.equal(latest.body.data.id, created.body.data.id);
+
+  const history = await request('/api/logistics/manifests/lm-demo-001/locations/history?limit=50');
+  assert.equal(history.response.status, 200);
+  assert.equal(history.body.success, true);
+  assert.ok(Array.isArray(history.body.data));
+  assert.equal(history.body.meta.limit, 50);
+  assert.ok(history.body.data.some((location) => location.id === created.body.data.id));
+
+  const limitedHistory = await request('/api/logistics/manifests/lm-demo-001/locations/history?limit=1');
+  assert.equal(limitedHistory.response.status, 200);
+  assert.equal(limitedHistory.body.data.length, 1);
+});
+
+test('logistics GPS endpoints validate payloads and manifest ids', async () => {
+  const invalidCoordinate = await request('/api/logistics/manifests/lm-demo-001/locations', {
+    method: 'POST',
+    body: JSON.stringify({
+      latitude: -91,
+      longitude: 106.816666,
+      accuracy: 15,
+    }),
+  });
+
+  assert.equal(invalidCoordinate.response.status, 400);
+  assert.equal(invalidCoordinate.body.error.code, 'VALIDATION_ERROR');
+  assert.equal(invalidCoordinate.body.error.details.field, 'latitude');
+
+  const missingManifest = await request('/api/logistics/manifests/missing-manifest/locations', {
+    method: 'POST',
+    body: JSON.stringify({
+      latitude: -6.2,
+      longitude: 106.816666,
+    }),
+  });
+
+  assert.equal(missingManifest.response.status, 404);
+  assert.equal(missingManifest.body.error.code, 'NOT_FOUND');
+
+  const invalidToken = await request('/api/logistics/manifests/lm-demo-001/locations/latest', {
+    headers: { Authorization: 'Bearer invalid-token-value' },
+  });
+
+  assert.equal(invalidToken.response.status, 401);
+  assert.equal(invalidToken.body.error.code, 'INVALID_TOKEN');
+
+  const invalidLimit = await request('/api/logistics/manifests/lm-demo-001/locations/history?limit=abc');
+  assert.equal(invalidLimit.response.status, 400);
+  assert.equal(invalidLimit.body.error.code, 'VALIDATION_ERROR');
+  assert.equal(invalidLimit.body.error.details.field, 'limit');
 });
 
 test('invalid IDs, payloads, users, and routes return consistent errors', async () => {
@@ -224,6 +410,7 @@ test('seed command remains idempotent', async () => {
     'qc_checklists',
     'logistics_manifests',
     'delivery_checkins',
+    'logistics_locations',
     'audit_logs',
   ];
   const beforeCounts = {};

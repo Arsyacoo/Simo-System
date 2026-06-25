@@ -1,11 +1,13 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Clock, MapPin, RefreshCw, Truck, User } from 'lucide-react';
+import { AlertCircle, Check, Clock, Copy, ExternalLink, MapPin, RefreshCw, Truck, User } from 'lucide-react';
 import {
   createDeliveryCheckin,
   getLogisticsManifests,
   updateLogisticsManifestStatus,
 } from '../services/logisticsApi';
 import { useBackendApi } from '../services/apiClient';
+import LogisticsLiveMap from '../components/LogisticsLiveMap';
+import { AlertMessage, EmptyState, PageHeader, SectionHeading, StatusBadge, Surface } from '../components/ui';
 
 const statusOptions = ['Prepared', 'On Delivery', 'Arrived', 'Issue'];
 
@@ -24,7 +26,7 @@ function formatDateTime(value) {
   }).format(new Date(value));
 }
 
-function StatusBadge({ status }) {
+function DeliveryStatusBadge({ status }) {
   return (
     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusStyles[status] || statusStyles.Prepared}`}>
       {status}
@@ -43,12 +45,26 @@ export default function Logistics() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [trackingLinkCopied, setTrackingLinkCopied] = useState(false);
+  const [trackingLinkError, setTrackingLinkError] = useState('');
   const useApi = useBackendApi;
 
   const selectedManifest = useMemo(
     () => manifests.find((manifest) => manifest.id === selectedManifestId) || manifests[0],
     [manifests, selectedManifestId],
   );
+  const driverTrackingPath = selectedManifest ? `/driver/tracking/${encodeURIComponent(selectedManifest.id)}` : '';
+  const driverTrackingUrl = useMemo(() => {
+    if (!driverTrackingPath) {
+      return '';
+    }
+
+    if (typeof window === 'undefined') {
+      return driverTrackingPath;
+    }
+
+    return new URL(driverTrackingPath, window.location.origin).toString();
+  }, [driverTrackingPath]);
 
   const loadManifests = useCallback(async function loadManifests() {
     setIsLoading(true);
@@ -127,130 +143,240 @@ export default function Logistics() {
     }
   }
 
+  function handleOpenTrackingPage() {
+    if (!driverTrackingUrl) return;
+    window.open(driverTrackingUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  async function handleCopyTrackingLink() {
+    if (!driverTrackingUrl) return;
+
+    setTrackingLinkError('');
+    setTrackingLinkCopied(false);
+
+    try {
+      await navigator.clipboard.writeText(driverTrackingUrl);
+      setTrackingLinkCopied(true);
+    } catch {
+      setTrackingLinkError('Tracking link could not be copied. Select the URL and copy it manually.');
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Logistics Manifest</h2>
-          <p className="text-slate-500">Pantau manifest, kendaraan, rute, dan perkembangan pengiriman CV Mugi Jaya.</p>
-        </div>
-        <button
-          type="button"
-          onClick={loadManifests}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
-        >
-          <RefreshCw size={16} /> {useApi ? 'Retry' : 'Refresh'}
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Delivery control"
+        title="Logistics Manifest"
+        description="Pantau manifest, kendaraan, rute, status pengiriman, dan manual check-in CV Mugi Jaya."
+        meta={
+          <>
+            <StatusBadge tone={useApi ? 'emerald' : 'amber'}>
+              {useApi ? 'Backend data enabled' : 'Demo data unavailable'}
+            </StatusBadge>
+            <StatusBadge tone="blue">{manifests.length} manifests</StatusBadge>
+          </>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={loadManifests}
+            disabled={isLoading}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={isLoading ? 'animate-spin' : ''} size={16} />
+            {isLoading ? 'Loading...' : useApi ? 'Retry' : 'Refresh'}
+          </button>
+        }
+      />
 
-      {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{message}</div>}
-      {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>}
+      {message && <AlertMessage type="success" title="Logistics updated">{message}</AlertMessage>}
+      {error && <AlertMessage type="error" title="Logistics data issue">{error}</AlertMessage>}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 p-5">
-            <h3 className="font-bold text-slate-800">Shipment Manifests</h3>
-            <p className="text-sm text-slate-500">Manifest number, driver, route, latest check-in, and status.</p>
-          </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="space-y-6">
+          <Surface padding="p-0">
+            <div className="p-5">
+              <SectionHeading
+                icon={Truck}
+                title="Shipment Manifests"
+                description="Manifest number, driver, vehicle, route, latest check-in, and delivery status."
+              />
+            </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">Manifest</th>
-                  <th className="px-5 py-3">Driver / Vehicle</th>
-                  <th className="px-5 py-3">Route</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Latest Check-in</th>
-                  <th className="px-5 py-3">Updated</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {isLoading ? (
-                  <tr><td className="px-5 py-6 text-slate-500" colSpan="6">Loading logistics data...</td></tr>
-                ) : manifests.length === 0 ? (
-                  <tr><td className="px-5 py-6 text-slate-500" colSpan="6">{useApi ? 'Belum ada manifest pengiriman.' : 'Data logistik belum tersedia saat ini.'}</td></tr>
-                ) : manifests.map((manifest) => (
-                  <tr
-                    key={manifest.id}
-                    onClick={() => {
-                      setSelectedManifestId(manifest.id);
-                      setStatusValue(manifest.deliveryStatus);
-                      setCheckinStatus(manifest.deliveryStatus);
-                    }}
-                    className={`cursor-pointer hover:bg-blue-50/60 ${selectedManifest?.id === manifest.id ? 'bg-blue-50' : ''}`}
-                  >
-                    <td className="px-5 py-4">
-                      <p className="font-bold text-slate-800">{manifest.manifestNumber}</p>
-                      <p className="text-xs text-slate-500">{manifest.projectName || 'No project'}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-700">{manifest.driverName}</p>
-                      <p className="text-xs text-slate-500">{manifest.vehiclePlate} · {manifest.vehicleType || '-'}</p>
-                    </td>
-                    <td className="px-5 py-4 text-slate-600">
-                      <p>{manifest.origin}</p>
-                      <p className="text-xs text-slate-400">to {manifest.destination}</p>
-                    </td>
-                    <td className="px-5 py-4"><StatusBadge status={manifest.deliveryStatus} /></td>
-                    <td className="px-5 py-4 text-slate-600">
-                      <p>{manifest.latestCheckin?.locationText || '-'}</p>
-                      <p className="text-xs text-slate-400">{formatDateTime(manifest.latestCheckin?.checkedInAt)}</p>
-                    </td>
-                    <td className="px-5 py-4 text-slate-500">{formatDateTime(manifest.updatedAt)}</td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-100 text-sm">
+                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3">Manifest</th>
+                    <th className="px-5 py-3">Driver / Vehicle</th>
+                    <th className="px-5 py-3">Route</th>
+                    <th className="px-5 py-3">Status</th>
+                    <th className="px-5 py-3">Latest Check-in</th>
+                    <th className="px-5 py-3">Updated</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {isLoading ? (
+                    <tr><td className="px-5 py-6 text-sm font-semibold text-slate-500" colSpan="6">Loading logistics data...</td></tr>
+                  ) : manifests.length === 0 ? (
+                    <tr>
+                      <td className="px-5 py-5" colSpan="6">
+                        <EmptyState
+                          icon={Truck}
+                          title={useApi ? 'No manifests found yet.' : 'Logistics data is unavailable.'}
+                          description={useApi ? 'Shipment manifests will appear after logistics data is seeded.' : 'Refresh after backend logistics data is enabled.'}
+                        />
+                      </td>
+                    </tr>
+                  ) : manifests.map((manifest) => (
+                    <tr
+                      key={manifest.id}
+                      onClick={() => {
+                        setSelectedManifestId(manifest.id);
+                        setStatusValue(manifest.deliveryStatus);
+                        setCheckinStatus(manifest.deliveryStatus);
+                        setTrackingLinkCopied(false);
+                        setTrackingLinkError('');
+                      }}
+                      className={`cursor-pointer hover:bg-blue-50/60 ${selectedManifest?.id === manifest.id ? 'bg-blue-50' : ''}`}
+                    >
+                      <td className="px-5 py-4">
+                        <p className="font-bold text-slate-800">{manifest.manifestNumber}</p>
+                        <p className="text-xs text-slate-500">{manifest.projectName || 'No project'}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="font-semibold text-slate-700">{manifest.driverName}</p>
+                        <p className="text-xs text-slate-500">{manifest.vehiclePlate} · {manifest.vehicleType || '-'}</p>
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">
+                        <p>{manifest.origin}</p>
+                        <p className="text-xs text-slate-400">to {manifest.destination}</p>
+                      </td>
+                      <td className="px-5 py-4"><DeliveryStatusBadge status={manifest.deliveryStatus} /></td>
+                      <td className="px-5 py-4 text-slate-600">
+                        <p>{manifest.latestCheckin?.locationText || '-'}</p>
+                        <p className="text-xs text-slate-400">{formatDateTime(manifest.latestCheckin?.checkedInAt)}</p>
+                      </td>
+                      <td className="px-5 py-4 text-slate-500">{formatDateTime(manifest.updatedAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Surface>
+
+          <LogisticsLiveMap selectedManifest={selectedManifest} />
+        </div>
 
         <aside className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 font-bold text-slate-800">Selected Manifest</h3>
+          <Surface>
+            <SectionHeading title="Selected Manifest" description="Detail manifest yang sedang dipilih untuk update status dan check-in." />
             {selectedManifest ? (
-              <div className="space-y-4 text-sm">
-                <div className="flex items-start gap-3"><Truck className="mt-0.5 text-blue-600" size={18} /><div><p className="font-bold">{selectedManifest.manifestNumber}</p><p className="text-slate-500">{selectedManifest.projectName}</p></div></div>
-                <div className="flex items-start gap-3"><User className="mt-0.5 text-slate-500" size={18} /><div><p className="font-semibold">{selectedManifest.driverName}</p><p className="text-slate-500">{selectedManifest.driverPhone || '-'} · {selectedManifest.vehiclePlate}</p></div></div>
-                <div className="flex items-start gap-3"><MapPin className="mt-0.5 text-slate-500" size={18} /><div><p>{selectedManifest.origin}</p><p className="text-slate-500">{selectedManifest.destination}</p></div></div>
+              <div className="mt-4 space-y-4 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <Truck className="mt-0.5 text-blue-600" size={18} />
+                    <div>
+                      <p className="font-bold text-slate-900">{selectedManifest.manifestNumber}</p>
+                      <p className="text-slate-500">{selectedManifest.projectName}</p>
+                    </div>
+                  </div>
+                  <DeliveryStatusBadge status={selectedManifest.deliveryStatus} />
+                </div>
+                <div className="flex items-start gap-3"><User className="mt-0.5 text-slate-500" size={18} /><div><p className="font-semibold text-slate-800">{selectedManifest.driverName}</p><p className="text-slate-500">{selectedManifest.driverPhone || '-'} | {selectedManifest.vehiclePlate}</p></div></div>
+                <div className="flex items-start gap-3"><MapPin className="mt-0.5 text-slate-500" size={18} /><div><p className="text-slate-800">{selectedManifest.origin}</p><p className="text-slate-500">{selectedManifest.destination}</p></div></div>
                 <div className="flex items-start gap-3"><Clock className="mt-0.5 text-slate-500" size={18} /><div><p>Departure: {formatDateTime(selectedManifest.departureTime)}</p><p className="text-slate-500">Arrival: {formatDateTime(selectedManifest.arrivalTime)}</p></div></div>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">Select a manifest to update delivery progress.</p>
+              <div className="mt-4">
+                <EmptyState title="No manifest selected." description="Select a manifest to update delivery progress." />
+              </div>
             )}
-          </div>
+          </Surface>
 
-          <form onSubmit={handleStatusUpdate} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <Surface>
+            <SectionHeading title="Driver Tracking Link" description="Use this manifest-specific link for driver GPS tracking." />
+            {selectedManifest ? (
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label htmlFor="driver-tracking-link" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    URL
+                  </label>
+                  <input
+                    id="driver-tracking-link"
+                    value={driverTrackingUrl}
+                    readOnly
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                  <button
+                    type="button"
+                    onClick={handleOpenTrackingPage}
+                    disabled={!driverTrackingUrl}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    <ExternalLink size={16} />
+                    Open Tracking Page
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyTrackingLink}
+                    disabled={!driverTrackingUrl}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {trackingLinkCopied ? <Check size={16} /> : <Copy size={16} />}
+                    {trackingLinkCopied ? 'Copied' : 'Copy Tracking Link'}
+                  </button>
+                </div>
+                {trackingLinkError && (
+                  <p className="text-sm font-semibold leading-5 text-rose-700">{trackingLinkError}</p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4">
+                <EmptyState title="No manifest selected." description="Select a manifest to generate a driver tracking link." />
+              </div>
+            )}
+          </Surface>
+
+          <form onSubmit={handleStatusUpdate} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="mb-4 font-bold text-slate-800">Update Delivery Status</h3>
-            <label className="block text-sm font-semibold text-slate-600">Delivery status</label>
-            <select value={statusValue} onChange={(event) => setStatusValue(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <label htmlFor="delivery-status" className="block text-sm font-semibold text-slate-600">Delivery status</label>
+            <select id="delivery-status" value={statusValue} onChange={(event) => setStatusValue(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
             </select>
-            <button disabled={!useApi || !selectedManifest || isSaving} className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">Save Status</button>
+            <button type="submit" disabled={!useApi || !selectedManifest || isSaving} className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+              {isSaving ? 'Saving status...' : 'Save Status'}
+            </button>
           </form>
 
-          <form onSubmit={handleCheckinSubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <form onSubmit={handleCheckinSubmit} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="mb-4 flex items-center gap-2 font-bold text-slate-800"><AlertCircle size={18} /> Manual Check-in</h3>
             <div className="space-y-3">
-              <label className="block text-sm font-semibold text-slate-600">Manifest</label>
-              <select value={selectedManifest?.id || ''} onChange={(event) => {
+              <label htmlFor="checkin-manifest" className="block text-sm font-semibold text-slate-600">Manifest</label>
+              <select id="checkin-manifest" value={selectedManifest?.id || ''} onChange={(event) => {
                   const manifest = manifests.find((item) => item.id === event.target.value);
                   setSelectedManifestId(event.target.value);
                   setStatusValue(manifest?.deliveryStatus || 'Prepared');
                   setCheckinStatus(manifest?.deliveryStatus || 'Prepared');
+                  setTrackingLinkCopied(false);
+                  setTrackingLinkError('');
                 }} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {manifests.map((manifest) => <option key={manifest.id} value={manifest.id}>{manifest.manifestNumber}</option>)}
               </select>
-              <label className="block text-sm font-semibold text-slate-600">Check-in status</label>
-              <select value={checkinStatus} onChange={(event) => setCheckinStatus(event.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <label htmlFor="checkin-status" className="block text-sm font-semibold text-slate-600">Check-in status</label>
+              <select id="checkin-status" value={checkinStatus} onChange={(event) => setCheckinStatus(event.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
               </select>
-              <label className="block text-sm font-semibold text-slate-600">Location text</label>
-              <input value={locationText} onChange={(event) => setLocationText(event.target.value)} required placeholder="e.g. Rest Area KM 57" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <label className="block text-sm font-semibold text-slate-600">Notes</label>
-              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows="3" placeholder="Manual delivery notes" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label htmlFor="checkin-location" className="block text-sm font-semibold text-slate-600">Location text</label>
+              <input id="checkin-location" value={locationText} onChange={(event) => setLocationText(event.target.value)} required placeholder="e.g. Rest Area KM 57" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label htmlFor="checkin-notes" className="block text-sm font-semibold text-slate-600">Notes</label>
+              <textarea id="checkin-notes" value={notes} onChange={(event) => setNotes(event.target.value)} rows="3" placeholder="Manual delivery notes" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <button disabled={!useApi || !selectedManifest || isSaving} className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300">Submit Check-in</button>
+            <button type="submit" disabled={!useApi || !selectedManifest || isSaving} className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+              {isSaving ? 'Saving check-in...' : 'Submit Check-in'}
+            </button>
           </form>
         </aside>
       </div>

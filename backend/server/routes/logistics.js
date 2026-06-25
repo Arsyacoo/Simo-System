@@ -12,11 +12,14 @@ import {
 } from '../utils/http.js';
 import {
   serializeDeliveryCheckin,
+  serializeLogisticsLocation,
   serializeLogisticsManifest,
 } from '../utils/serializers.js';
 
 const DELIVERY_STATUS_OPTIONS = ['Prepared', 'On Delivery', 'Arrived', 'Issue'];
 const LOGISTICS_ROLES = ['Admin', 'Owner', 'Production Manager'];
+const LOCATION_SOURCE = 'driver_geolocation';
+const NO_GPS_LOCATION_MESSAGE = 'No GPS location has been received for this manifest yet.';
 
 function requireLogisticsRole(req, res, next) {
   if (!LOGISTICS_ROLES.includes(req.user?.roleName)) {
@@ -35,6 +38,100 @@ function validateStatus(status) {
   }
 
   return status;
+}
+
+function optionalAuth(req, res, next) {
+  if (!req.headers.authorization) {
+    next();
+    return;
+  }
+
+  requireAuth(req, res, next);
+}
+
+function requireBoundedNumber(value, field, min, max) {
+  if (value === undefined || value === null || value === '') {
+    throw new HttpError(400, 'VALIDATION_ERROR', `${field} is required.`, { field });
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < min || number > max) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `${field} must be between ${min} and ${max}.`, {
+      field,
+      min,
+      max,
+    });
+  }
+
+  return number;
+}
+
+function optionalBoundedNumber(value, field, min, max) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < min || number > max) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `${field} must be between ${min} and ${max}.`, {
+      field,
+      min,
+      max,
+    });
+  }
+
+  return number;
+}
+
+function optionalNonNegativeNumber(value, field) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < 0) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `${field} must be a non-negative number.`, {
+      field,
+    });
+  }
+
+  return number;
+}
+
+function normalizeLocationSource(source) {
+  if (source === undefined || source === null || source === '') {
+    return LOCATION_SOURCE;
+  }
+
+  const value = String(source).trim();
+
+  if (value !== LOCATION_SOURCE) {
+    throw new HttpError(400, 'VALIDATION_ERROR', `source must be ${LOCATION_SOURCE}.`, {
+      field: 'source',
+      allowedValues: [LOCATION_SOURCE],
+    });
+  }
+
+  return value;
+}
+
+function parseLocationHistoryLimit(value) {
+  if (value === undefined) {
+    return 50;
+  }
+
+  const limit = Number(value);
+
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'limit must be a positive integer.', {
+      field: 'limit',
+    });
+  }
+
+  return Math.min(limit, 200);
 }
 
 const manifestSelect = `
@@ -59,12 +156,104 @@ const manifestSelect = `
   LEFT JOIN users u ON u.id = dc.checked_in_by
 `;
 
+const locationSelect = `
+  SELECT ll.*, u.name AS recorded_by_name
+  FROM logistics_locations ll
+  LEFT JOIN users u ON u.id = ll.recorded_by
+`;
+
 async function getManifest(db, id) {
   return get(db, `${manifestSelect} WHERE lm.id = ?`, [id]);
 }
 
 export function createLogisticsRouter(db) {
   const router = Router();
+
+  router.post('/manifests/:id/locations', optionalAuth, asyncHandler(async (req, res) => {
+    const manifest = requireRecord(
+      await get(db, 'SELECT id FROM logistics_manifests WHERE id = ?', [req.params.id]),
+      'Logistics manifest',
+    );
+    const payload = req.body || {};
+    const id = `ll-${randomUUID()}`;
+    const latitude = requireBoundedNumber(payload.latitude, 'latitude', -90, 90);
+    const longitude = requireBoundedNumber(payload.longitude, 'longitude', -180, 180);
+    const accuracy = optionalNonNegativeNumber(payload.accuracy, 'accuracy');
+    const speed = optionalNonNegativeNumber(payload.speed, 'speed');
+    const heading = optionalBoundedNumber(payload.heading, 'heading', 0, 360);
+    const source = normalizeLocationSource(payload.source);
+
+    await run(db, `INSERT INTO logistics_locations
+        (id, manifest_id, latitude, longitude, accuracy, speed, heading, recorded_by, source, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`, [
+      id,
+      manifest.id,
+      latitude,
+      longitude,
+      accuracy,
+      speed,
+      heading,
+      req.user?.id || null,
+      source,
+    ]);
+
+    const savedLocation = await get(db, `${locationSelect} WHERE ll.id = ?`, [id]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Location recorded successfully',
+      data: serializeLogisticsLocation(savedLocation),
+    });
+  }));
+
+  router.get('/manifests/:id/locations/latest', optionalAuth, asyncHandler(async (req, res) => {
+    requireRecord(
+      await get(db, 'SELECT id FROM logistics_manifests WHERE id = ?', [req.params.id]),
+      'Logistics manifest',
+    );
+
+    const latestLocation = await get(
+      db,
+      `${locationSelect}
+       WHERE ll.manifest_id = ?
+       ORDER BY ll.created_at DESC, ll.id DESC
+       LIMIT 1`,
+      [req.params.id],
+    );
+
+    res.json({
+      success: true,
+      message: latestLocation ? 'Latest location loaded successfully' : NO_GPS_LOCATION_MESSAGE,
+      data: serializeLogisticsLocation(latestLocation),
+    });
+  }));
+
+  router.get('/manifests/:id/locations/history', optionalAuth, asyncHandler(async (req, res) => {
+    requireRecord(
+      await get(db, 'SELECT id FROM logistics_manifests WHERE id = ?', [req.params.id]),
+      'Logistics manifest',
+    );
+
+    const limit = parseLocationHistoryLimit(req.query.limit);
+    const rows = await all(
+      db,
+      `${locationSelect}
+       WHERE ll.manifest_id = ?
+       ORDER BY ll.created_at ASC, ll.id ASC
+       LIMIT ?`,
+      [req.params.id, limit],
+    );
+
+    res.json({
+      success: true,
+      message: rows.length ? 'Location history loaded successfully' : NO_GPS_LOCATION_MESSAGE,
+      data: rows.map(serializeLogisticsLocation),
+      meta: {
+        count: rows.length,
+        limit,
+      },
+    });
+  }));
 
   router.use(requireAuth, requireLogisticsRole);
 
@@ -153,7 +342,7 @@ export function createLogisticsRouter(db) {
 
     const updated = await withTransaction(db, async () => {
       await run(db, `UPDATE logistics_manifests
-         SET delivery_status = ?, arrival_time = CASE WHEN ? = 'Arrived' THEN COALESCE(arrival_time, CURRENT_TIMESTAMP) ELSE arrival_time END,
+         SET delivery_status = ?, arrival_time = CASE WHEN ? = 'Arrived' THEN COALESCE(arrival_time, CAST(CURRENT_TIMESTAMP AS TEXT)) ELSE arrival_time END,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`, [nextStatus, nextStatus, manifest.id]);
 

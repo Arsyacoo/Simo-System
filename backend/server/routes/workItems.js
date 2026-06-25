@@ -11,6 +11,21 @@ import {
 import { serializeWorkItem } from '../utils/serializers.js';
 
 const WORK_STATUS_OPTIONS = ['To-Do', 'In-Progress', 'Done'];
+const PRODUCTION_STATUS_ROLES = ['Foreman', 'Production Manager', 'Admin'];
+
+function requireProductionStatusRole(req, res, next) {
+  void res;
+
+  if (!PRODUCTION_STATUS_ROLES.includes(req.user?.roleName)) {
+    throw new HttpError(
+      403,
+      'FORBIDDEN',
+      'Akses update produksi hanya tersedia untuk Foreman, Production Manager, dan Admin.',
+    );
+  }
+
+  next();
+}
 
 export function createWorkItemsRouter(db) {
   const router = Router();
@@ -28,7 +43,7 @@ export function createWorkItemsRouter(db) {
     sendData(res, serializeWorkItem(row));
   }));
 
-  router.patch('/:id/status', requireAuth, asyncHandler(async (req, res) => {
+  router.patch('/:id/status', requireAuth, requireProductionStatusRole, asyncHandler(async (req, res) => {
     const { status } = req.body || {};
     const userId = req.user.id;
 

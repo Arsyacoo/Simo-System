@@ -102,6 +102,19 @@ CREATE TABLE IF NOT EXISTS delivery_checkins (
   checked_in_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS logistics_locations (
+  id TEXT PRIMARY KEY,
+  manifest_id TEXT NOT NULL REFERENCES logistics_manifests(id) ON DELETE CASCADE,
+  latitude NUMERIC(10, 7) NOT NULL CHECK (latitude >= -90 AND latitude <= 90),
+  longitude NUMERIC(10, 7) NOT NULL CHECK (longitude >= -180 AND longitude <= 180),
+  accuracy REAL CHECK (accuracy IS NULL OR accuracy >= 0),
+  speed REAL CHECK (speed IS NULL OR speed >= 0),
+  heading REAL CHECK (heading IS NULL OR (heading >= 0 AND heading <= 360)),
+  recorded_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  source TEXT NOT NULL DEFAULT 'driver_geolocation',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -127,6 +140,8 @@ CREATE INDEX IF NOT EXISTS idx_qc_checklists_work_item_id ON qc_checklists(work_
 CREATE INDEX IF NOT EXISTS idx_logistics_manifests_project_id ON logistics_manifests(project_id);
 CREATE INDEX IF NOT EXISTS idx_logistics_manifests_status ON logistics_manifests(delivery_status);
 CREATE INDEX IF NOT EXISTS idx_delivery_checkins_manifest_id ON delivery_checkins(manifest_id);
+CREATE INDEX IF NOT EXISTS idx_logistics_locations_manifest_id ON logistics_locations(manifest_id);
+CREATE INDEX IF NOT EXISTS idx_logistics_locations_created_at ON logistics_locations(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_module ON audit_logs(module);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);

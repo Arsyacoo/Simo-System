@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { useAppData } from '../context/AppDataCore';
-import { LogIn, Mail, Lock, ShieldAlert } from 'lucide-react';
+import { LogIn, Mail, Lock, ShieldAlert, UserRoundCheck } from 'lucide-react';
+
+const DEMO_ACCOUNTS = [
+  { role: 'Admin', email: 'dewi.lestari@simo.test' },
+  { role: 'Owner', email: 'rina.wijaya@simo.test' },
+  { role: 'Production Manager', email: 'budi.santoso@simo.test' },
+  { role: 'Foreman', email: 'joko.anwar@simo.test' },
+  { role: 'QC Inspector', email: 'siti.nurhaliza@simo.test' },
+];
 
 export default function Login() {
   const { login } = useAppData();
@@ -8,6 +16,12 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const fillDemoAccount = (accountEmail) => {
+    setEmail(accountEmail);
+    setPassword('password');
+    setError('');
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -24,56 +38,62 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-4 sm:p-6 font-sans">
-      <div className="w-full max-w-5xl grid md:grid-cols-12 gap-8 items-center">
-        
-        {/* Left Side: Brand & Value Prop */}
-        <div className="md:col-span-5 text-white space-y-6 hidden md:block">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-2xl font-black shadow-lg shadow-blue-500/30">
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4 font-sans sm:p-6">
+      <div className="grid w-full max-w-6xl items-stretch gap-6 md:grid-cols-12">
+        <div className="hidden rounded-lg border border-white/10 bg-slate-900 p-8 text-white shadow-2xl shadow-black/30 md:col-span-5 md:flex md:flex-col md:justify-between">
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600 text-2xl font-black shadow-lg shadow-blue-500/20">
             S
           </div>
-          <h1 className="text-4xl font-extrabold tracking-tight leading-none">
-            SIMO <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Mugi Jaya</span>
-          </h1>
-          <p className="text-slate-400 text-lg leading-relaxed">
-            Operational Management Information System untuk efisiensi Produksi, Logistik, dan Digital Quality Control.
-          </p>
-          <div className="space-y-4 pt-4 border-t border-slate-800">
-            <div className="flex items-center gap-3">
-              <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-              <span className="text-sm font-medium text-slate-300">Pantau produksi dan logistik dalam satu alur kerja</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="h-2 w-2 rounded-full bg-indigo-500"></div>
-              <span className="text-sm font-medium text-slate-300">Kontrol akses tim sesuai tanggung jawab operasional</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
-              <span className="text-sm font-medium text-slate-300">Riwayat perubahan tersimpan untuk kebutuhan audit</span>
-            </div>
+
+          <div className="mt-14 space-y-5">
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-300">Operational control system</p>
+            <h1 className="text-4xl font-black leading-tight tracking-normal">
+              SIMO Mugi Jaya
+            </h1>
+            <p className="text-base leading-7 text-slate-300">
+              Satu ruang kerja untuk monitoring produksi, inspeksi QC, manifest logistik, dan audit trail.
+            </p>
+          </div>
+
+          <div className="mt-10 space-y-3 border-t border-white/10 pt-6">
+            {['Produksi terpantau per proyek dan warehouse', 'QC gate memastikan material siap kirim', 'Audit trail mendukung cerita demo akhir'].map((item) => (
+              <div key={item} className="flex items-start gap-3">
+                <span className="mt-1.5 h-2 w-2 rounded-full bg-emerald-400"></span>
+                <span className="text-sm font-medium leading-6 text-slate-300">{item}</span>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Right Side: Login Card */}
-        <div className="md:col-span-7 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/40">
-          <div className="md:hidden text-center mb-6">
-            <h1 className="text-3xl font-black text-white">SIMO Mugi Jaya</h1>
-            <p className="text-slate-400 text-sm mt-1">Operational Management Information System</p>
+        <div className="rounded-lg border border-white/10 bg-white p-6 shadow-2xl shadow-black/30 sm:p-8 md:col-span-7">
+          <div className="mb-6 md:hidden">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-xl font-black text-white">
+              S
+            </div>
+            <h1 className="text-3xl font-black text-slate-900">SIMO Mugi Jaya</h1>
+            <p className="mt-1 text-sm text-slate-500">Operational Management Information System</p>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-2">Masuk ke SIMO</h2>
-          <p className="text-slate-400 text-sm mb-6">Gunakan akun yang telah terdaftar untuk melanjutkan.</p>
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-slate-900">Masuk ke SIMO</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              Gunakan akun demo sesuai peran untuk menjalankan alur produksi, QC, logistik, dan audit.
+            </p>
+          </div>
 
           {error && (
-            <div className="mb-6 flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
-              <ShieldAlert className="flex-shrink-0 mt-0.5" size={18} />
-              <span>{error}</span>
+            <div className="mb-6 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+              <ShieldAlert className="mt-0.5 flex-shrink-0 text-rose-600" size={18} />
+              <div>
+                <p className="font-bold">Login belum berhasil</p>
+                <p className="mt-0.5 leading-5">{error}</p>
+              </div>
             </div>
           )}
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5" htmlFor="email">
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500" htmlFor="email">
                 Alamat Email
               </label>
               <div className="relative">
@@ -85,13 +105,13 @@ export default function Login() {
                   placeholder="nama@perusahaan.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-3 pl-11 pr-4 text-sm text-white placeholder-slate-500 outline-none transition-all focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5" htmlFor="password">
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500" htmlFor="password">
                 Password
               </label>
               <div className="relative">
@@ -103,7 +123,7 @@ export default function Login() {
                   placeholder="********"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-3 pl-11 pr-4 text-sm text-white placeholder-slate-500 outline-none transition-all focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-slate-200 bg-white py-3 pl-11 pr-4 text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
               </div>
             </div>
@@ -111,10 +131,13 @@ export default function Login() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition-all hover:shadow-blue-600/40 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-3.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60"
             >
               {isLoading ? (
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                <>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  <span>Memeriksa akun...</span>
+                </>
               ) : (
                 <>
                   <LogIn size={18} />
@@ -124,8 +147,26 @@ export default function Login() {
             </button>
           </form>
 
+          <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <UserRoundCheck className="text-blue-600" size={18} />
+              <p className="text-sm font-bold text-slate-800">Akun demo kelas</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {DEMO_ACCOUNTS.map((account) => (
+                <button
+                  key={account.email}
+                  type="button"
+                  onClick={() => fillDemoAccount(account.email)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-xs font-semibold text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                >
+                  <span className="block font-bold text-slate-900">{account.role}</span>
+                  <span className="block truncate text-slate-500">{account.email}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-
       </div>
     </div>
   );
