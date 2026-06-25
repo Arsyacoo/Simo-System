@@ -1,4 +1,4 @@
-﻿import { BrowserRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Box,
@@ -9,6 +9,7 @@ import {
   User,
   RefreshCw,
   LogOut,
+  Database,
 } from 'lucide-react';
 import { AppDataProvider } from './context/AppDataContext';
 import { useAppData } from './context/AppDataCore';
@@ -21,6 +22,7 @@ import DriverTracking from './pages/DriverTracking';
 import AuditLogs from './pages/AuditLogs';
 import Warehouses from './pages/Warehouses';
 import QualityControl from './pages/QualityControl';
+import MasterData from './pages/MasterData';
 
 const SidebarItem = ({ icon: Icon, label, path }) => (
   <NavLink
@@ -125,7 +127,10 @@ const Layout = ({ children }) => {
         <nav className="flex gap-2 overflow-x-auto px-4 pb-4 lg:block lg:space-y-1.5">
           <SidebarItem icon={LayoutDashboard} label="Dashboard" path="/" />
           {permissions.canUpdateProduction && (
-            <SidebarItem icon={Box} label="Warehouses" path="/warehouses" />
+            <>
+              <SidebarItem icon={Box} label="Warehouses" path="/warehouses" />
+              <SidebarItem icon={Database} label="Master Data" path="/master-data" />
+            </>
           )}
           {permissions.canAccessLogistics && (
             <SidebarItem icon={Truck} label="Logistics" path="/logistics" />
@@ -191,6 +196,12 @@ function ProtectedAppRoutes() {
           path="/warehouses"
           element={
             permissions.canUpdateProduction ? <Warehouses /> : <Navigate to="/" replace />
+          }
+        />
+        <Route
+          path="/master-data"
+          element={
+            permissions.canUpdateProduction ? <MasterData /> : <Navigate to="/" replace />
           }
         />
         <Route

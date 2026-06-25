@@ -15,6 +15,7 @@ import { EmptyState, LoadingState, SectionHeading, StatusBadge, Surface } from '
 const DEFAULT_CENTER = [-2.5489, 118.0149];
 const POLLING_INTERVAL_MS = 5000;
 const HISTORY_LIMIT = 50;
+const STALE_SIGNAL_MS = 60_000;
 
 const vehicleIcon = new L.Icon({
   iconRetinaUrl: markerIcon2xUrl,
@@ -147,6 +148,7 @@ export default function LogisticsLiveMap({ selectedManifest, manifest }) {
   const [error, setError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
   const [mapResetKey, setMapResetKey] = useState(0);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -209,6 +211,14 @@ export default function LogisticsLiveMap({ selectedManifest, manifest }) {
   }, [manifestId, retryKey]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, POLLING_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const latestPosition = useMemo(() => locationToPosition(latestLocation), [latestLocation]);
   const routePositions = useMemo(
     () => locationHistory.map(locationToPosition).filter(Boolean),
@@ -220,6 +230,15 @@ export default function LogisticsLiveMap({ selectedManifest, manifest }) {
   const mapCenter = latestPosition || DEFAULT_CENTER;
   const mapZoom = latestPosition ? 14 : 5;
   const resetKey = `${manifestId}-${latestLocation?.id || 'empty'}-${mapResetKey}`;
+  const latestLocationAgeMs = latestLocation?.createdAt
+    ? currentTime - new Date(latestLocation.createdAt).getTime()
+    : null;
+  const isSignalStale = typeof latestLocationAgeMs === 'number' && latestLocationAgeMs > STALE_SIGNAL_MS;
+  const signalStatus = latestLocation
+    ? isSignalStale
+      ? { label: 'Signal Stale', tone: 'rose', action: 'Ask the driver to keep the tracking page open and check network/GPS.' }
+      : { label: 'GPS Live', tone: 'emerald', action: 'Delivery tracking is active. Monitor route progress from this map.' }
+    : { label: 'Waiting for GPS', tone: 'amber', action: 'Ask the driver to open the tracking link and start GPS or demo route.' };
 
   return (
     <Surface padding="p-0" className="overflow-hidden">
@@ -230,8 +249,8 @@ export default function LogisticsLiveMap({ selectedManifest, manifest }) {
           description={activeManifest ? `${activeManifest.manifestNumber} | ${activeManifest.driverName} | ${activeManifest.vehiclePlate}` : 'Select a manifest to view tracking.'}
           action={
             <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge tone={latestLocation ? 'emerald' : 'amber'}>
-                {latestLocation ? 'GPS received' : 'Waiting for GPS'}
+              <StatusBadge tone={signalStatus.tone}>
+                {signalStatus.label}
               </StatusBadge>
               {isRefreshing && <StatusBadge tone="blue">Refreshing</StatusBadge>}
               <button
@@ -320,6 +339,13 @@ export default function LogisticsLiveMap({ selectedManifest, manifest }) {
         </div>
 
         <aside className="space-y-3 p-5">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Monitoring Insight</p>
+              <StatusBadge tone={signalStatus.tone}>{signalStatus.label}</StatusBadge>
+            </div>
+            <p className="text-sm font-semibold leading-5 text-slate-700">{signalStatus.action}</p>
+          </div>
           <DetailRow
             icon={Navigation}
             label="Latitude"

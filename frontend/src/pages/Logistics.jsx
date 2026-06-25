@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Check, Clock, Copy, ExternalLink, MapPin, RefreshCw, Truck, User } from 'lucide-react';
 import {
   createDeliveryCheckin,
@@ -328,6 +328,9 @@ export default function Logistics() {
                     {trackingLinkCopied ? <Check size={16} /> : <Copy size={16} />}
                     {trackingLinkCopied ? 'Copied' : 'Copy Tracking Link'}
                   </button>
+                </div>
+                <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold leading-5 text-violet-800">
+                  Open this link on the driver's device. For classroom demos, click <span className="font-black">Start Demo Route</span> on the driver page if real GPS permission is unavailable.
                 </div>
                 {trackingLinkError && (
                   <p className="text-sm font-semibold leading-5 text-rose-700">{trackingLinkError}</p>

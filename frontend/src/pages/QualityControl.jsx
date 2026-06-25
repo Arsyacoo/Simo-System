@@ -394,62 +394,91 @@ export default function QualityControl() {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] border-collapse text-left">
-            <thead>
-              <tr className="border-y border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
-                <th className="px-5 py-4">Time</th>
-                <th className="px-5 py-4">Material</th>
-                <th className="px-5 py-4">Dimension</th>
-                <th className="px-5 py-4">Status</th>
-                <th className="px-5 py-4">Evidence</th>
-                <th className="px-5 py-4">Inspector</th>
-                <th className="px-5 py-4">Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
+          <>
+            <div className="space-y-3 px-5 pb-5 md:hidden">
               {data.qcChecklists.map((record) => (
-                <tr key={record.id} className="transition-colors hover:bg-slate-50/70">
-                  <td className="px-5 py-4 text-sm font-semibold text-slate-700">{record.createdAt}</td>
-                  <td className="px-5 py-4 text-sm font-semibold text-slate-800">{record.materialName}</td>
-                  <td className="px-5 py-4 text-sm text-slate-600">
-                    {record.length} x {record.width} x {record.thickness}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className={`rounded border px-2.5 py-1 text-xs font-bold ${qcStyles[record.qcStatus]}`}>
+                <article key={record.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-bold text-slate-900">{record.materialName}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{record.createdAt}</p>
+                    </div>
+                    <span className={`inline-flex shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-bold ${qcStyles[record.qcStatus]}`}>
                       {record.qcStatus}
                     </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    {record.evidencePhoto ? (
-                      record.evidencePhoto.endsWith('.jpg') || record.evidencePhoto.endsWith('.png') || record.evidencePhoto.endsWith('.jpeg') || record.evidencePhoto.startsWith('qc-') ? (
-                        <img
-                          src={
-                            record.evidencePhoto.startsWith('http')
-                              ? record.evidencePhoto
-                              : `${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api').replace('/api', '')}/uploads/${record.evidencePhoto}`
-                          }
-                          alt="Evidence"
-                          className="h-10 w-10 rounded-lg object-cover border border-slate-200 shadow-sm cursor-pointer hover:scale-105 transition-transform"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                          }}
-                          onClick={(e) => window.open(e.target.src, '_blank')}
-                        />
-                      ) : (
-                        <span className="text-xs text-slate-400 italic">{record.evidencePhoto}</span>
-                      )
-                    ) : (
-                      <span className="text-xs text-slate-400">-</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-4 text-sm text-slate-600">{record.createdBy}</td>
-                  <td className="px-5 py-4 text-sm text-slate-500">{record.notes}</td>
-                </tr>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-lg bg-slate-50 p-2">
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Dimension</p>
+                      <p className="mt-1 font-semibold text-slate-800">{record.length} x {record.width} x {record.thickness}</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-2">
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Inspector</p>
+                      <p className="mt-1 truncate font-semibold text-slate-800">{record.createdBy}</p>
+                    </div>
+                  </div>
+                  {record.notes && <p className="mt-3 text-sm leading-5 text-slate-600">{record.notes}</p>}
+                </article>
               ))}
-            </tbody>
-          </table>
-          </div>
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[860px] border-collapse text-left">
+                <thead>
+                  <tr className="border-y border-slate-200 bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <th className="px-5 py-4">Time</th>
+                    <th className="px-5 py-4">Material</th>
+                    <th className="px-5 py-4">Dimension</th>
+                    <th className="px-5 py-4">Status</th>
+                    <th className="px-5 py-4">Evidence</th>
+                    <th className="px-5 py-4">Inspector</th>
+                    <th className="px-5 py-4">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.qcChecklists.map((record) => (
+                    <tr key={record.id} className="transition-colors hover:bg-slate-50/70">
+                      <td className="px-5 py-4 text-sm font-semibold text-slate-700">{record.createdAt}</td>
+                      <td className="px-5 py-4 text-sm font-semibold text-slate-800">{record.materialName}</td>
+                      <td className="px-5 py-4 text-sm text-slate-600">
+                        {record.length} x {record.width} x {record.thickness}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-bold ${qcStyles[record.qcStatus]}`}>
+                          {record.qcStatus}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        {record.evidencePhoto ? (
+                          record.evidencePhoto.endsWith('.jpg') || record.evidencePhoto.endsWith('.png') || record.evidencePhoto.endsWith('.jpeg') || record.evidencePhoto.startsWith('qc-') ? (
+                            <img
+                              src={
+                                record.evidencePhoto.startsWith('http')
+                                  ? record.evidencePhoto
+                                  : `${(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api').replace('/api', '')}/uploads/${record.evidencePhoto}`
+                              }
+                              alt="Evidence"
+                              className="h-10 w-10 cursor-pointer rounded-lg border border-slate-200 object-cover shadow-sm transition-transform hover:scale-105"
+                              onError={(event) => {
+                                event.currentTarget.style.display = 'none';
+                              }}
+                              onClick={(event) => window.open(event.currentTarget.src, '_blank')}
+                            />
+                          ) : (
+                            <span className="text-xs italic text-slate-400">{record.evidencePhoto}</span>
+                          )
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-sm text-slate-600">{record.createdBy}</td>
+                      <td className="px-5 py-4 text-sm text-slate-500">{record.notes}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Surface>
     </div>
