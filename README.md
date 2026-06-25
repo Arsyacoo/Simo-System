@@ -1,79 +1,287 @@
-﻿# SIMO Mugi Jaya
+# SIMO Mugi Jaya
 
-SIMO Mugi Jaya is a full-stack Operational Management Information System for production, warehouse execution, quality control, audit logging, and logistics manifest monitoring.
+**SIMO Mugi Jaya** adalah sistem informasi operasional full-stack untuk mengelola alur kerja produksi, warehouse, quality control, audit trail, dan logistics tracking dalam satu dashboard modern.
 
-The project is now organized as a clean monorepo with separate frontend and backend apps.
+Project ini sudah berbentuk **monorepo** dengan frontend React + Vite dan backend Express + PostgreSQL.
 
-## Directory Structure
+---
 
-```text
-simo-system/
-├── frontend/              # React + Vite frontend
-│   ├── public/
-│   ├── src/
-│   ├── index.html
-│   ├── vite.config.js
-│   ├── eslint.config.js
-│   ├── package.json
-│   ├── package-lock.json
-│   └── .env.example
-├── backend/               # Express + PostgreSQL backend
-│   ├── server/
-│   ├── package.json
-│   ├── package-lock.json
-│   └── .env.example
-├── docs/                  # Migration, sprint, and restructure notes
-├── README.md
-├── .gitignore
-├── package.json           # Root convenience scripts
-└── package-lock.json
-```
+## Highlights
+
+- **Dashboard Operations Control** untuk memantau progress project, warehouse, work item, QC, dan shipping readiness.
+- **Master Data CRUD** untuk Project dan Warehouse.
+- **Production Work Items** untuk update status pekerjaan produksi.
+- **Digital QC Checklist** dengan evidence upload dan shipping gate.
+- **Logistics Manifest** untuk status pengiriman, driver, kendaraan, rute, dan check-in.
+- **Driver GPS Tracking** dengan real browser geolocation.
+- **Demo GPS Route Simulator** agar live map tetap bisa didemokan tanpa bergantung izin GPS perangkat.
+- **Admin Live Map** berbasis Leaflet + OpenStreetMap dengan marker, route polyline, dan signal status.
+- **Audit Logs** untuk aktivitas penting seperti update produksi, QC, logistics, dan master data.
+- **JWT Auth + Role-Based Access Control**.
+- **Mobile-friendly UI improvements** untuk tampilan dashboard dan QC history.
+
+---
 
 ## Tech Stack
 
-- Frontend: React 19, Vite 8, React Router, Tailwind CSS v4, Lucide React, Vitest.
-- Backend: Node.js, Express 5, PostgreSQL via `pg`, JWT auth, RBAC, Multer uploads.
-- Database: PostgreSQL. SQLite is not used as the active database technology.
+### Frontend
 
-## Install
+- React 19
+- Vite 8
+- React Router
+- Tailwind CSS v4
+- Lucide React
+- Leaflet + React Leaflet
+- Vitest + Testing Library
 
-Install all packages from the root:
+### Backend
 
-```bash
-npm run install:all
+- Node.js
+- Express 5
+- PostgreSQL via `pg`
+- JWT Authentication
+- RBAC middleware
+- Multer upload handling
+- Node test runner
+
+### Database
+
+- PostgreSQL
+- Schema initialized from `backend/server/db/schema.sql`
+
+---
+
+## Project Structure
+
+```text
+Simo MUGI JAYA/
+├── frontend/                  # React + Vite frontend
+│   ├── src/
+│   │   ├── components/         # Shared UI and map components
+│   │   ├── context/            # App state and auth context
+│   │   ├── data/               # Demo seed data
+│   │   ├── pages/              # App pages
+│   │   └── services/           # API clients
+│   ├── index.html
+│   ├── package.json
+│   └── .env.example
+├── backend/                   # Express + PostgreSQL backend
+│   ├── server/
+│   │   ├── db/                 # DB helper and schema
+│   │   ├── routes/             # API routes
+│   │   ├── seed/               # Demo seed script
+│   │   ├── tests/              # Backend API tests
+│   │   └── utils/              # Auth, HTTP, serializers, audit logger
+│   ├── package.json
+│   └── .env.example
+├── package.json               # Root convenience scripts
+├── README.md
+└── .gitignore
 ```
 
-Or install each app separately:
+---
 
-```bash
-npm install --prefix frontend
-npm install --prefix backend
+## Main Modules
+
+## 1. Authentication & Roles
+
+Login memakai JWT. Menu dan route dibatasi berdasarkan role.
+
+Demo roles:
+
+- Owner
+- Production Manager
+- Foreman
+- QC Inspector
+- Admin
+
+Permission utama:
+
+- Production update
+- QC submission
+- Logistics access
+- Audit log view
+- Master data management
+
+---
+
+## 2. Dashboard
+
+Dashboard menampilkan ringkasan operasional:
+
+- Total project
+- Total warehouse
+- Total work item
+- Production completed
+- Ready to ship
+- Pending QC
+- Project and warehouse progress
+
+---
+
+## 3. Master Data CRUD
+
+Halaman **Master Data** menyediakan CRUD untuk:
+
+### Project Master
+
+- Create project
+- Edit project
+- Delete project jika belum dipakai data lain
+- Status dan priority validation
+- Audit log untuk create/update/delete
+
+### Warehouse Master
+
+- Create warehouse
+- Edit warehouse
+- Delete warehouse jika belum dipakai work item/QC
+- Optional link ke project
+- Audit log untuk create/update/delete
+
+Endpoint utama:
+
+```text
+GET    /api/projects
+POST   /api/projects
+PUT    /api/projects/:id
+DELETE /api/projects/:id
+
+GET    /api/warehouses
+POST   /api/warehouses
+PUT    /api/warehouses/:id
+DELETE /api/warehouses/:id
 ```
+
+---
+
+## 4. Production Work Items
+
+Foreman, Production Manager, atau Admin dapat mengubah status work item:
+
+- `To-Do`
+- `In-Progress`
+- `Done`
+
+Setiap perubahan status masuk ke audit log.
+
+---
+
+## 5. Digital Quality Control
+
+QC Inspector/Admin dapat submit checklist QC:
+
+- Material
+- Dimensi panjang/lebar/tebal
+- QC status
+- Notes
+- Evidence photo
+
+QC status:
+
+- `Pending`
+- `Passed QC`
+- `Rework`
+
+Jika item **Passed QC**, material dapat menjadi **Ready To Ship**.
+
+---
+
+## 6. Logistics & Delivery Tracking
+
+Modul logistics mendukung:
+
+- Manifest pengiriman
+- Driver dan kendaraan
+- Origin/destination
+- Delivery status
+- Manual check-in
+- Driver tracking link
+- Admin live map
+
+Delivery status:
+
+- `Prepared`
+- `On Delivery`
+- `Arrived`
+- `Issue`
+
+---
+
+## 7. Driver GPS Tracking
+
+Driver membuka route:
+
+```text
+/driver/tracking/:manifestId
+```
+
+Driver dapat memilih:
+
+- **Start GPS Tracking** untuk GPS asli dari browser.
+- **Start Demo Route** untuk simulator rute demo saat presentasi/hackathon.
+
+GPS dikirim ke backend dan disimpan di `logistics_locations`.
+
+---
+
+## 8. Admin Live Map
+
+Admin live map menampilkan:
+
+- Latest GPS marker
+- Route polyline
+- History points
+- Last updated
+- GPS status
+
+Signal status:
+
+- `Waiting for GPS`
+- `GPS Live`
+- `Signal Stale`
+
+Live map memakai polling setiap 5 detik.
+
+---
+
+## 9. Audit Logs
+
+Audit log mencatat aktivitas penting:
+
+- Production status update
+- QC submission
+- Logistics status update
+- Delivery check-in
+- Project CRUD
+- Warehouse CRUD
+
+---
 
 ## Environment Setup
 
-Create local env files from examples. Do not commit real `.env` files. Restart the Vite dev server after changing `frontend/.env`.
+Buat file `.env` dari contoh.
 
-Frontend:
+### Frontend
 
 ```bash
 cp frontend/.env.example frontend/.env
 ```
 
-Backend:
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-Frontend defaults:
+Contoh isi:
 
 ```env
 VITE_API_BASE_URL=http://localhost:3001
 VITE_USE_BACKEND_API=true
 ```
 
-Backend defaults to configure:
+### Backend
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Contoh isi:
 
 ```env
 PORT=3001
@@ -84,114 +292,225 @@ CORS_ORIGIN=http://localhost:5173
 UPLOAD_DIR=server/public/uploads
 ```
 
-PostgreSQL must be running before starting the backend. If startup prints `PostgreSQL connection failed`, verify that `backend/.env` exists, `DATABASE_URL` points to an active database, and port `5432` is reachable.
+> Jangan commit file `.env` asli.
 
-## PostgreSQL Setup
+---
 
-1. Create a PostgreSQL database, for example `simo_system`.
-2. Set `DATABASE_URL` in `backend/.env`.
-3. Initialize and seed demo data:
+## Install
+
+Dari root project:
+
+```bash
+npm run install:all
+```
+
+Atau install manual:
+
+```bash
+npm install --prefix frontend
+npm install --prefix backend
+```
+
+---
+
+## Database Setup
+
+1. Pastikan PostgreSQL berjalan.
+2. Buat database, misalnya:
+
+```sql
+CREATE DATABASE simo_system;
+CREATE DATABASE simo_system_test;
+```
+
+3. Set `DATABASE_URL` dan `DATABASE_URL_TEST` di `backend/.env`.
+4. Jalankan seed demo:
 
 ```bash
 npm run db:seed
 ```
 
-The backend initializes tables from `backend/server/db/schema.sql` when the app/database helper starts.
+Backend akan menginisialisasi schema dari:
 
-## Run
+```text
+backend/server/db/schema.sql
+```
 
-From the root:
+---
+
+## Run Development
+
+Jalankan frontend dan backend bersamaan:
+
+```bash
+npm run dev:full
+```
+
+Atau terpisah:
+
+```bash
+npm run dev:frontend
+npm run dev:backend
+```
+
+Default URL:
+
+```text
+Frontend       http://localhost:5173
+Backend API    http://localhost:3001/api
+Health Check   http://localhost:3001/api/health
+Uploads        http://localhost:3001/uploads/<filename>
+```
+
+---
+
+## Demo Login Accounts
+
+Semua seeded user memakai password:
+
+```text
+password
+```
+
+| Role | Email |
+|---|---|
+| Owner | `rina.wijaya@simo.test` |
+| Production Manager | `budi.santoso@simo.test` |
+| Foreman | `joko.anwar@simo.test` |
+| QC Inspector | `siti.nurhaliza@simo.test` |
+| Admin | `dewi.lestari@simo.test` |
+
+---
+
+## Demo Flow Recommended
+
+Untuk presentasi cepat:
+
+1. Login sebagai Admin.
+2. Buka **Dashboard**.
+3. Buka **Master Data** dan tunjukkan CRUD Project/Warehouse.
+4. Buka **Warehouses** dan update status work item.
+5. Buka **QC** dan submit checklist.
+6. Buka **Logistics** dan pilih manifest.
+7. Klik **Open Tracking Page**.
+8. Di halaman driver klik **Start Demo Route**.
+9. Kembali ke **Logistics**.
+10. Tunggu ±5 detik hingga map menampilkan marker dan route.
+11. Buka **Audit Logs** untuk menunjukkan trace aktivitas.
+
+---
+
+## Quality Checks
+
+Command yang sudah dipakai untuk verifikasi:
+
+```bash
+npm --prefix frontend run lint
+npm --prefix frontend run build
+npm --prefix backend run test
+```
+
+Expected result:
+
+- Frontend lint pass
+- Frontend build pass
+- Backend tests pass
+
+Catatan: Vite bisa menampilkan warning chunk size. Itu warning performa, bukan build failure.
+
+---
+
+## Available Scripts
+
+Root scripts:
 
 ```bash
 npm run dev:frontend
 npm run dev:backend
 npm run dev:full
-```
-
-Or from each app:
-
-```bash
-npm --prefix frontend run dev
-npm --prefix backend run dev
-```
-
-Default URLs:
-
-- Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:3001/api`
-- Health check: `http://localhost:3001/api/health`
-- Uploads: `http://localhost:3001/uploads/<filename>`
-
-## Build, Lint, and Test
-
-```bash
-npm run lint:frontend
+npm run install:all
 npm run build:frontend
+npm run lint:frontend
 npm run test:frontend
 npm run test:backend
+npm run db:seed
 ```
 
-Backend tests require a reachable PostgreSQL database from `DATABASE_URL_TEST` or `DATABASE_URL`.
+---
 
-## Demo Login Accounts
+## Security Notes
 
-All seeded users use password `password`.
+- Commit `.env.example`, jangan commit `.env` asli.
+- Gunakan `JWT_SECRET` kuat untuk production.
+- Gunakan HTTPS untuk production, terutama untuk browser geolocation.
+- Driver GPS browser membutuhkan permission location.
+- Batasi CORS origin sesuai domain production.
+- Jangan expose database credential di repository.
 
-- Owner: `rina.wijaya@simo.test`
-- Production Manager: `budi.santoso@simo.test`
-- Foreman: `joko.anwar@simo.test`
-- QC Inspector: `siti.nurhaliza@simo.test`
-- Admin: `dewi.lestari@simo.test`
-
-## Modules
-
-- Dashboard monitoring.
-- Warehouse production work item updates.
-- Digital QC checklist with evidence upload.
-- Audit log tracking for production, QC, and logistics actions.
-- Logistics manifest foundation with manual delivery check-ins.
-- JWT authentication and role-based access control.
-
-## Known Limitations
-
-- Logistics check-ins are manual text entries; no live GPS yet.
-- No geofencing or live map integration yet.
-- Backend tests need a configured PostgreSQL instance.
-- Vehicle and driver master data are still stored directly on logistics manifests.
-
-## GitHub Push Notes
-
-Before pushing to GitHub, keep only safe project files in version control.
-
-- Commit `.env.example` files, not real `.env` files.
-- Keep `backend/.env` and `frontend/.env` local only.
-- Do not commit database passwords, JWT secrets, access tokens, or private connection strings.
-- Use hosting environment variables for production credentials.
-- Check ignored env files before pushing:
+Cek env ignored:
 
 ```bash
 git check-ignore -v backend/.env frontend/.env
 ```
 
-- Review pending files before commit:
+---
 
-```bash
-git status --short
-```
+## Known Limitations
 
-Recommended files to keep as examples:
+- Live map masih polling, belum WebSocket/SSE.
+- Geofencing belum tersedia.
+- ETA calculation belum tersedia.
+- Route deviation alert belum tersedia.
+- User management UI belum lengkap.
+- Migration system formal belum ditambahkan.
+- Production deployment config belum final.
 
-- `backend/.env.example`
-- `frontend/.env.example`
+---
 
-Recommended files to keep local only:
+## Roadmap
 
-- `backend/.env`
-- `frontend/.env`
-- Local reports, notes, and generated documentation that are not needed to run the app.
+### Phase 1 — Stabilization
 
-## Documentation
+- Hardening auth/session.
+- Better error boundary.
+- Database migration system.
+- More automated tests.
 
-See `docs/` for migration notes, progress reports, logistics sprint notes, and directory restructure details.
+### Phase 2 — Logistics Pro
 
+- WebSocket/SSE realtime tracking.
+- Geofencing alert.
+- Route deviation alert.
+- ETA and delay detection.
+- Driver and vehicle master data.
 
+### Phase 3 — Production Pro
+
+- Work order CRUD.
+- Material stock.
+- BOM.
+- Production scheduling.
+- Warehouse transfer.
+
+### Phase 4 — Business Intelligence
+
+- KPI dashboard.
+- Export PDF/Excel.
+- Daily reports.
+- Audit analytics.
+- Delivery performance report.
+
+---
+
+## Current Status
+
+SIMO Mugi Jaya saat ini sudah siap untuk **demo internal, hackathon, dan MVP client review**.
+
+Untuk production live client, lanjutkan hardening pada:
+
+- Security
+- Deployment
+- Backup strategy
+- Migration
+- Monitoring
+- Full QA regression
